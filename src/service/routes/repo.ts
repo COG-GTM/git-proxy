@@ -31,11 +31,11 @@ function repo(proxy: Proxy) {
     const proxyURL = getProxyURL(req);
     const query: Partial<RepoQuery> = {};
 
-    for (const key in req.query) {
-      if (!key) continue;
-      if (key === 'limit' || key === 'skip') continue;
+    const ALLOWED_QUERY_KEYS: (keyof RepoQuery)[] = ['project', 'name', 'url'];
 
+    for (const key of ALLOWED_QUERY_KEYS) {
       const rawValue = req.query[key];
+      if (rawValue === undefined) continue;
       let parsedValue: boolean | undefined;
       if (rawValue === 'false') parsedValue = false;
       if (rawValue === 'true') parsedValue = true;
