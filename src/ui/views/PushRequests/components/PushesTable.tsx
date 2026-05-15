@@ -38,7 +38,7 @@ interface PushesTableProps {
   canceled?: boolean;
   authorised?: boolean;
   rejected?: boolean;
-  errored?: boolean;
+  error?: boolean;
   handleError: (error: string) => void;
 }
 
@@ -61,7 +61,7 @@ const PushesTable: React.FC<PushesTableProps> = (props) => {
     if (props.canceled !== undefined) query.canceled = props.canceled;
     if (props.authorised !== undefined) query.authorised = props.authorised;
     if (props.rejected !== undefined) query.rejected = props.rejected;
-    if (props.errored !== undefined) query.errored = props.errored;
+    if (props.error !== undefined) query.error = props.error;
 
     const load = async () => {
       setIsLoading(true);

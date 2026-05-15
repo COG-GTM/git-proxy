@@ -34,11 +34,19 @@ router.get('/', async (req: Request, res: Response) => {
     type: 'push',
   };
 
-  for (const key in req.query) {
-    if (!key) continue;
-    if (key === 'limit' || key === 'skip') continue;
+  const ALLOWED_QUERY_KEYS: (keyof PushQuery)[] = [
+    'type',
+    'error',
+    'blocked',
+    'allowPush',
+    'authorised',
+    'canceled',
+    'rejected',
+  ];
 
+  for (const key of ALLOWED_QUERY_KEYS) {
     const rawValue = req.query[key];
+    if (rawValue === undefined) continue;
     let parsedValue: boolean | undefined;
     if (rawValue === 'false') parsedValue = false;
     if (rawValue === 'true') parsedValue = true;

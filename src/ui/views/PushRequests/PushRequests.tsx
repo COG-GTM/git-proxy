@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
     {
       tabName: 'Error',
       tabIcon: Error,
-      tabContent: <PushesTable errored handleError={handlePushTableError} />,
+      tabContent: <PushesTable error handleError={handlePushTableError} />,
     },
   ];
 
