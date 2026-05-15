@@ -46,7 +46,13 @@ export const configure = async (): Promise<PassportStatic> => {
   }
 
   if (authMethods.some((auth) => auth.type.toLowerCase() === 'local')) {
-    await local.createDefaultAdmin?.();
+    if (config.getSeedDefaultUsers()) {
+      await local.createDefaultAdmin?.();
+      console.warn(
+        "WARNING: Default users 'admin' and 'user' have been created with default passwords. " +
+          'Change these passwords immediately in production!',
+      );
+    }
   }
 
   return passport;

@@ -355,6 +355,10 @@
         }
       }
     },
+    "seedDefaultUsers": {
+      "description": "Whether to seed default admin and user accounts on startup. Set to false in production to prevent creation of default credentials.",
+      "type": "boolean"
+    },
     "uiRouteAuth": {
       "description": "UI routes that require authentication (logged in or admin)",
       "type": "object",

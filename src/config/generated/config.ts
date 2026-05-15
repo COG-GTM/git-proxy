@@ -75,6 +75,11 @@ export interface GitProxyConfig {
    * API Rate limiting configuration.
    */
   rateLimit?: RateLimit;
+  /**
+   * Whether to seed default admin and user accounts on startup. Set to false in production to
+   * prevent creation of default credentials.
+   */
+  seedDefaultUsers?: boolean;
   sessionMaxAgeHours?: number;
   /**
    * List of database sources. The first source in the configuration with enabled=true will be
@@ -773,6 +778,7 @@ const typeMap: any = {
       { json: 'privateOrganizations', js: 'privateOrganizations', typ: u(undefined, a('any')) },
       { json: 'proxyUrl', js: 'proxyUrl', typ: u(undefined, '') },
       { json: 'rateLimit', js: 'rateLimit', typ: u(undefined, r('RateLimit')) },
+      { json: 'seedDefaultUsers', js: 'seedDefaultUsers', typ: u(undefined, true) },
       { json: 'sessionMaxAgeHours', js: 'sessionMaxAgeHours', typ: u(undefined, 3.14) },
       { json: 'sink', js: 'sink', typ: u(undefined, a(r('Database'))) },
       { json: 'sslCertPemPath', js: 'sslCertPemPath', typ: u(undefined, '') },

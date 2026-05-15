@@ -161,6 +161,7 @@
     "key": "certs/key.pem",
     "cert": "certs/cert.pem"
   },
+  "seedDefaultUsers": true,
   "uiRouteAuth": {
     "enabled": false,
     "rules": [
