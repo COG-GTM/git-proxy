@@ -15,6 +15,7 @@
  */
 
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import auth from './auth';
 import push from './push';
 import home from './home';
@@ -25,14 +26,28 @@ import config from './config';
 import { jwtAuthHandler } from '../passport/jwtAuthHandler';
 import { Proxy } from '../../proxy';
 
+export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return next();
+  }
+  jwtAuthHandler()(req, res, (err?: unknown) => {
+    if (err) return next(err);
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      res.status(401).json({ message: 'Authentication required' });
+      return;
+    }
+    next();
+  });
+};
+
 const routes = (proxy: Proxy) => {
   const router = express.Router();
   router.use('/api', home);
   router.use('/api/auth', auth.router);
   router.use('/api/v1/healthcheck', healthcheck);
-  router.use('/api/v1/push', jwtAuthHandler(), push);
-  router.use('/api/v1/repo', jwtAuthHandler(), repo(proxy));
-  router.use('/api/v1/user', jwtAuthHandler(), users);
+  router.use('/api/v1/push', requireAuth, push);
+  router.use('/api/v1/repo', requireAuth, repo(proxy));
+  router.use('/api/v1/user', requireAuth, users);
   router.use('/api/v1/config', config);
   return router;
 };
