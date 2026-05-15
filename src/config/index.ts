@@ -317,6 +317,11 @@ export const getRateLimit = () => {
   return config.rateLimit;
 };
 
+export const getSeedDefaultUsers = (): boolean => {
+  const config = loadFullConfiguration();
+  return config.seedDefaultUsers !== false;
+};
+
 // Function to handle configuration updates
 const handleConfigUpdate = async (newConfig: Configuration) => {
   console.log('Configuration updated from external source');
