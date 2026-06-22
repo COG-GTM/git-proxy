@@ -42,6 +42,8 @@ description: JSON schema reference documentation for GitProxy
 | **Type**     | `string` |
 | **Required** | No       |
 
+**Description:** Secret used to sign session cookies. Must be set to a strong, unique value via the GIT_PROXY_COOKIE_SECRET environment variable or this field. GitProxy refuses to start if this is empty or left as the insecure built-in default ('cookie secret').
+
 </blockquote>
 </details>
 
@@ -2029,4 +2031,4 @@ Specific value: `"jwt"`
 </details>
 
 ----------------------------------------------------------------------------------------------------------------------------
-Generated using [json-schema-for-humans](https://github.com/coveooss/json-schema-for-humans) on 2026-01-21 at 14:25:25 +0100
+Generated using [json-schema-for-humans](https://github.com/coveooss/json-schema-for-humans) on 2026-06-22 at 14:12:09 +0000

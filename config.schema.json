@@ -10,7 +10,10 @@
       "description": "Deprecated: Used in early versions of git proxy to configure the remote host that traffic is proxied to. In later versions, the repository URL is used to determine the domain proxied, allowing multiple hosts to be proxied by one instance.",
       "deprecated": true
     },
-    "cookieSecret": { "type": "string" },
+    "cookieSecret": {
+      "type": "string",
+      "description": "Secret used to sign session cookies. Must be set to a strong, unique value via the GIT_PROXY_COOKIE_SECRET environment variable or this field. GitProxy refuses to start if this is empty or left as the insecure built-in default ('cookie secret')."
+    },
     "sessionMaxAgeHours": { "type": "number" },
     "api": {
       "description": "Third party APIs",

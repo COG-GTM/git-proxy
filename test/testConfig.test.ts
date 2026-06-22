@@ -59,6 +59,9 @@ describe('user configuration', () => {
   beforeEach(async () => {
     vi.resetModules();
     oldEnv = { ...process.env };
+    // Ensure a clean slate: other test files set this env var globally, which
+    // would otherwise override the cookieSecret values exercised here.
+    delete process.env.GIT_PROXY_COOKIE_SECRET;
     tempDir = fs.mkdtempSync('gitproxy-test');
     tempUserFile = path.join(tempDir, 'test-settings.json');
     const fileModule = await import('../src/config/file');
@@ -271,6 +274,33 @@ describe('user configuration', () => {
     expect(config.getCookieSecret()).toBe('test-cookie-secret');
   });
 
+  it('should throw if cookieSecret is set to the insecure built-in default', async () => {
+    fs.writeFileSync(tempUserFile, JSON.stringify({ cookieSecret: 'cookie secret' }));
+
+    const config = await import('../src/config');
+    config.invalidateCache();
+
+    expect(() => config.getCookieSecret()).toThrow(/insecure built-in default/);
+  });
+
+  it('should throw if cookieSecret is not set', async () => {
+    fs.writeFileSync(tempUserFile, JSON.stringify({ cookieSecret: '' }));
+
+    const config = await import('../src/config');
+    config.invalidateCache();
+
+    expect(() => config.getCookieSecret()).toThrow(/cookieSecret is not set/);
+  });
+
+  it('should return a custom cookieSecret from the config file', async () => {
+    fs.writeFileSync(tempUserFile, JSON.stringify({ cookieSecret: 'a-strong-unique-secret' }));
+
+    const config = await import('../src/config');
+    config.invalidateCache();
+
+    expect(config.getCookieSecret()).toBe('a-strong-unique-secret');
+  });
+
   it('should override default settings for mongo connection string if env var is used', async () => {
     const user = { sink: [{ type: 'mongo', enabled: true }] };
     fs.writeFileSync(tempUserFile, JSON.stringify(user));
@@ -310,7 +340,7 @@ describe('user configuration', () => {
   });
 
   it('should test all getter functions for coverage', async () => {
-    fs.writeFileSync(tempUserFile, '{}');
+    fs.writeFileSync(tempUserFile, JSON.stringify({ cookieSecret: 'a-strong-unique-secret' }));
 
     const config = await import('../src/config');
 
@@ -404,6 +434,9 @@ describe('Configuration Update Handling', () => {
 
   beforeEach(() => {
     oldEnv = { ...process.env };
+    // Ensure a clean slate: other test files set this env var globally, which
+    // would otherwise override the cookieSecret values exercised here.
+    delete process.env.GIT_PROXY_COOKIE_SECRET;
     tempDir = fs.mkdtempSync('gitproxy-test');
     tempUserFile = path.join(tempDir, 'test-settings.json');
     configFile.setConfigFile(tempUserFile);
@@ -479,6 +512,9 @@ describe('loadFullConfiguration', () => {
   beforeEach(async () => {
     vi.resetModules();
     oldEnv = { ...process.env };
+    // Ensure a clean slate: other test files set this env var globally, which
+    // would otherwise override the cookieSecret values exercised here.
+    delete process.env.GIT_PROXY_COOKIE_SECRET;
     tempDir = fs.mkdtempSync('gitproxy-test');
     tempUserFile = path.join(tempDir, 'test-settings.json');
 

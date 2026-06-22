@@ -46,6 +46,11 @@ export interface GitProxyConfig {
    * Customisable e-mail address to share in proxy responses and warnings
    */
   contactEmail?: string;
+  /**
+   * Secret used to sign session cookies. Must be set to a strong, unique value via the
+   * GIT_PROXY_COOKIE_SECRET environment variable or this field. GitProxy refuses to start if
+   * this is empty or left as the insecure built-in default ('cookie secret').
+   */
   cookieSecret?: string;
   /**
    * Flag to enable CSRF protections for UI
