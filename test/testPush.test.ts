@@ -294,7 +294,7 @@ describe('Push API', () => {
       .post(`/api/v1/push/${TEST_PUSH.id}/authorise`)
       .send({ reason: 'Testing approval' });
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('Not logged in');
+    expect(res.body.message).toBe('Authentication required');
   });
 
   it('should allow an authorizer to reject a push', async () => {
@@ -457,7 +457,7 @@ describe('Push API', () => {
       .post(`/api/v1/push/${TEST_PUSH.id}/reject`)
       .send({ reason: 'Testing rejection' });
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('Not logged in');
+    expect(res.body.message).toBe('Authentication required');
   });
 
   it('should fetch all pushes', async () => {
@@ -536,6 +536,6 @@ describe('Push API', () => {
       .post(`/api/v1/push/${TEST_PUSH.id}/cancel`)
       .send({ reason: 'Testing rejection' });
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('Not logged in');
+    expect(res.body.message).toBe('Authentication required');
   });
 });
