@@ -230,11 +230,21 @@ export const getAPIs = () => {
   return config.api || {};
 };
 
+const INSECURE_DEFAULT_COOKIE_SECRET = 'cookie secret';
+
 export const getCookieSecret = (): string => {
   const config = loadFullConfiguration();
 
   if (!config.cookieSecret) {
     throw new Error('cookieSecret is not set!');
+  }
+
+  if (config.cookieSecret === INSECURE_DEFAULT_COOKIE_SECRET) {
+    throw new Error(
+      'cookieSecret is set to the insecure built-in default. ' +
+        'Set a strong, unique secret via the GIT_PROXY_COOKIE_SECRET environment variable ' +
+        'or the cookieSecret field in your config file.',
+    );
   }
 
   return config.cookieSecret;

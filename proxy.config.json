@@ -1,5 +1,5 @@
 {
-  "cookieSecret": "cookie secret",
+  "cookieSecret": "",
   "sessionMaxAgeHours": 12,
   "rateLimit": {
     "windowMs": 60000,

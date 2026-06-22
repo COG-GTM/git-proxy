@@ -207,6 +207,8 @@ As per their documentation:
 >
 > Note HMAC-256 is used to sign the session ID. For this reason, the secret should contain at least 32 bytes of entropy.
 
+This value **must** be configured before GitProxy will start. Set it to a strong, unique value via the `GIT_PROXY_COOKIE_SECRET` environment variable or the `cookieSecret` field in your config file. GitProxy refuses to start if `cookieSecret` is empty or left as the insecure built-in default (`cookie secret`), so that deployments do not sign session cookies with a publicly known value.
+
 #### `sessionMaxAgeHours`
 
 Specifies the number of hours to use when calculating the `Expires Set-Cookie` attribute **for the GitProxy API** (not the proxy itself).
