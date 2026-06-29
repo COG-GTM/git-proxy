@@ -24,6 +24,7 @@ const {
   GIT_PROXY_HTTPS_UI_PORT = 8444,
   GIT_PROXY_COOKIE_SECRET,
   GIT_PROXY_MONGO_CONNECTION_STRING = 'mongodb://localhost:27017/git-proxy',
+  GIT_PROXY_ADMIN_PASSWORD,
 } = process.env;
 
 export const serverConfig: ServerConfig = {
@@ -34,4 +35,5 @@ export const serverConfig: ServerConfig = {
   GIT_PROXY_HTTPS_UI_PORT,
   GIT_PROXY_COOKIE_SECRET,
   GIT_PROXY_MONGO_CONNECTION_STRING,
+  GIT_PROXY_ADMIN_PASSWORD,
 };
