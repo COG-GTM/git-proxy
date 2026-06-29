@@ -18,6 +18,11 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    env: {
+      // Provide a known admin password so tests that log in as admin/admin
+      // keep working after the hardcoded default was removed.
+      GIT_PROXY_ADMIN_PASSWORD: 'admin',
+    },
     pool: 'forks',
     poolOptions: {
       forks: {

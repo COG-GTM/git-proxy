@@ -73,6 +73,22 @@ export GIT_PROXY_UI_HOST="http://www.git-proxy.com"
 export GIT_PROXY_UI_PORT="5000"
 ```
 
+### Set the default admin password
+
+When the `local` authentication method is enabled, GitProxy bootstraps a single
+`admin` account on first start. Set the `GIT_PROXY_ADMIN_PASSWORD` environment
+variable to control its password:
+
+```
+export GIT_PROXY_ADMIN_PASSWORD="a-strong-secret"
+```
+
+If `GIT_PROXY_ADMIN_PASSWORD` is not set, GitProxy generates a cryptographically
+random password and logs it **once** to the console when the account is first
+created. Copy it from the logs and change it after logging in. The account is
+only created if it does not already exist, so restarts never reset it. GitProxy
+no longer ships the previous hardcoded `admin/admin` and `user/user` accounts.
+
 ### Validate configuration
 
 To validate your GitProxy configuration, run:
