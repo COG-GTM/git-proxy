@@ -24,6 +24,14 @@ import { isAdminUser } from './utils';
 import { Proxy } from '../../proxy';
 import { handleErrorAndLog } from '../../utils/errors';
 
+/**
+ * Allow-list of query parameters that may be copied into the database query for
+ * repos. Restricting to known schema fields prevents NoSQL/query-operator
+ * injection: any key not in this set (in particular `$`-prefixed MongoDB
+ * operators or dotted paths) is ignored.
+ */
+const ALLOWED_REPO_QUERY_KEYS = new Set<string>(['name', 'project', 'url']);
+
 function repo(proxy: Proxy) {
   const router = express.Router();
 
@@ -34,6 +42,7 @@ function repo(proxy: Proxy) {
     for (const key in req.query) {
       if (!key) continue;
       if (key === 'limit' || key === 'skip') continue;
+      if (!ALLOWED_REPO_QUERY_KEYS.has(key)) continue;
 
       const rawValue = req.query[key];
       let parsedValue: boolean | undefined;
