@@ -16,7 +16,7 @@
 
 import { Express } from 'express';
 import request from 'supertest';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as db from '../src/db';
 import { Service } from '../src/service';
 
@@ -671,6 +671,29 @@ describe('repo routes - edge cases', () => {
         .query({ '': 'empty' });
 
       expect(res.status).toBe(200);
+    });
+
+    it('should drop injected query operator keys and keep allowed filters', async () => {
+      const getReposSpy = vi.spyOn(db, 'getRepos').mockResolvedValue([]);
+
+      const res = await request(app).get('/api/v1/repo').set('Cookie', adminCookie).query({
+        name: 'some-repo',
+        $where: 'sleep(1000)',
+        'url.$ne': 'x',
+        unknownField: 'value',
+      });
+
+      expect(res.status).toBe(200);
+      expect(getReposSpy).toHaveBeenCalledTimes(1);
+
+      const passedQuery = getReposSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(passedQuery).toMatchObject({ name: 'some-repo' });
+      expect(passedQuery).not.toHaveProperty('unknownField');
+      expect(Object.keys(passedQuery).every((k) => !k.startsWith('$') && !k.includes('.'))).toBe(
+        true,
+      );
+
+      getReposSpy.mockRestore();
     });
   });
 

@@ -29,6 +29,30 @@ interface AuthoriseRequest {
 
 const router = express.Router();
 
+/**
+ * Allow-list of query parameters that may be copied into the database query for
+ * pushes. Restricting to known schema fields prevents NoSQL/query-operator
+ * injection: any key not in this set (in particular `$`-prefixed MongoDB
+ * operators or dotted paths) is ignored.
+ */
+const ALLOWED_PUSH_QUERY_KEYS = new Set<string>([
+  'type',
+  'error',
+  'blocked',
+  'allowPush',
+  'authorised',
+  'canceled',
+  'rejected',
+  'autoApproved',
+  'autoRejected',
+  'repo',
+  'repoName',
+  'project',
+  'branch',
+  'commitFrom',
+  'commitTo',
+]);
+
 router.get('/', async (req: Request, res: Response) => {
   const query: Partial<PushQuery> = {
     type: 'push',
@@ -37,6 +61,7 @@ router.get('/', async (req: Request, res: Response) => {
   for (const key in req.query) {
     if (!key) continue;
     if (key === 'limit' || key === 'skip') continue;
+    if (!ALLOWED_PUSH_QUERY_KEYS.has(key)) continue;
 
     const rawValue = req.query[key];
     let parsedValue: boolean | undefined;

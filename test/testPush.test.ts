@@ -498,6 +498,32 @@ describe('Push API', () => {
     expect(push.blocked).toBe(true);
   });
 
+  it('should drop injected query operator keys and keep allowed filters', async () => {
+    await loginAsApprover();
+    const getPushesSpy = vi.spyOn(db, 'getPushes').mockResolvedValue([]);
+
+    const res = await request(app).get('/api/v1/push').set('Cookie', `${cookie}`).query({
+      error: 'true',
+      $where: 'sleep(1000)',
+      'repo.$ne': 'x',
+      unknownField: 'value',
+    });
+
+    expect(res.status).toBe(200);
+    expect(getPushesSpy).toHaveBeenCalledTimes(1);
+
+    const passedQuery = getPushesSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(passedQuery).toMatchObject({ type: 'push', error: true });
+    expect(passedQuery).not.toHaveProperty('$where');
+    expect(passedQuery).not.toHaveProperty('repo.$ne');
+    expect(passedQuery).not.toHaveProperty('unknownField');
+    expect(Object.keys(passedQuery).every((k) => !k.startsWith('$') && !k.includes('.'))).toBe(
+      true,
+    );
+
+    getPushesSpy.mockRestore();
+  });
+
   it('should allow a committer to cancel a push', async () => {
     await db.writeAudit(TEST_PUSH);
     await loginAsCommitter();
