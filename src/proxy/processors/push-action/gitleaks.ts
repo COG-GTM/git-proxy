@@ -34,7 +34,7 @@ function runCommand(
   stderr: string;
 }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, shell: true });
+    const child = spawn(command, args, { cwd });
 
     let stdout = '';
     let stderr = '';
@@ -171,7 +171,7 @@ const exec = async (_req: Request, action: Action): Promise<Action> => {
       'git',
       // not using --no-merges to be sure we're scanning the diff
       // only add ^ if the commitFrom isn't the repo's rootCommit
-      `--log-opts='--first-parent ${rootCommit === commitFrom ? rootCommit : `${commitFrom}^`}..${commitTo}'`,
+      `--log-opts=--first-parent ${rootCommit === commitFrom ? rootCommit : `${commitFrom}^`}..${commitTo}`,
     ].filter((v) => typeof v === 'string');
     const gitleaks = await runCommand(workingDir, 'gitleaks', gitleaksArgs);
 
