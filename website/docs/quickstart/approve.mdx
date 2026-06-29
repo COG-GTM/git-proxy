@@ -32,12 +32,21 @@ The `ID` for your push corresponds to the last part of the URL:
 
 #### 2. Authenticate with the API
 
-Use the default & auto-generated GitProxy username & password credentials to obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`):
+Use the GitProxy `admin` username and password to obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`):
 
 ```bash
 curl -H "Content-Type: application/json" -c git-proxy-cookie -X POST \
-  -d '{"username":"admin","password":"admin"}' http://localhost:8080/auth/login
+  -d '{"username":"admin","password":"<admin-password>"}' http://localhost:8080/auth/login
 ```
+
+:::info
+
+The default `admin` account is bootstrapped on first start. Set the
+`GIT_PROXY_ADMIN_PASSWORD` environment variable to choose its password. If you
+don't set it, GitProxy generates a random password and prints it **once** to the
+server logs on first startup — copy it from there and change it after logging in.
+
+:::
 
 #### 3. Retrieve push with `ID` from database
 
@@ -99,10 +108,10 @@ The `ID` for your push corresponds to the last part of the URL:
 
 #### 2. Authenticate with the CLI
 
-Use the default & auto-generated GitProxy username & password credentials to authenticate and obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`):
+Use the GitProxy `admin` credentials to authenticate and obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`). The admin password is taken from `GIT_PROXY_ADMIN_PASSWORD`, or auto-generated and logged once on first startup (see the [note above](/docs/quickstart/approve#2-authenticate-with-the-api)):
 
 ```bash
-$ npx -- @finos/git-proxy-cli login --username admin --password admin
+$ npx -- @finos/git-proxy-cli login --username admin --password <admin-password>
 Login "admin" <admin@place.com> (admin): OK
 ```
 
