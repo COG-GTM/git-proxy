@@ -30,6 +30,10 @@ interface AuthoriseRequest {
 const router = express.Router();
 
 router.get('/', async (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).send({ message: 'Not logged in' });
+    return;
+  }
   const query: Partial<PushQuery> = {
     type: 'push',
   };
@@ -49,6 +53,10 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
+  if (!req.user) {
+    res.status(401).send({ message: 'Not logged in' });
+    return;
+  }
   const id = req.params.id;
   const push = await db.getPush(id);
   if (push) {

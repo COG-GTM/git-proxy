@@ -28,6 +28,10 @@ function repo(proxy: Proxy) {
   const router = express.Router();
 
   router.get('/', async (req: Request, res: Response) => {
+    if (!req.user) {
+      res.status(401).send({ message: 'Not logged in' });
+      return;
+    }
     const proxyURL = getProxyURL(req);
     const query: Partial<RepoQuery> = {};
 
@@ -47,6 +51,10 @@ function repo(proxy: Proxy) {
   });
 
   router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
+    if (!req.user) {
+      res.status(401).send({ message: 'Not logged in' });
+      return;
+    }
     const proxyURL = getProxyURL(req);
     const _id = req.params.id;
     const qd = await db.getRepoById(_id);
