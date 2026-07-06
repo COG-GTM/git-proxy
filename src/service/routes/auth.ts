@@ -74,11 +74,7 @@ const getLoginStrategy = () => {
 const loginSuccessHandler = () => async (req: Request, res: Response) => {
   try {
     const currentUser = toPublicUser({ ...req.user } as User);
-    console.log(
-      `serivce.routes.auth.login: user logged in, username=${
-        currentUser.username
-      } profile=${JSON.stringify(currentUser)}`,
-    );
+    console.log(`service.routes.auth.login: user logged in, username=${currentUser.username}`);
     res.send({
       message: 'success',
       user: currentUser,
@@ -136,7 +132,7 @@ router.get('/openidconnect/callback', (req: Request, res: Response, next: NextFu
           console.error('Login error:', err);
           return res.status(500).end();
         }
-        console.log('Logged in successfully. User:', user);
+        console.log(`Logged in successfully. username=${(user as { username?: string }).username}`);
         return res.redirect(`${uiHost}:${uiPort}/dashboard/profile`);
       });
     },
