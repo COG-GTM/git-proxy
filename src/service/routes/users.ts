@@ -21,12 +21,20 @@ import * as db from '../../db';
 import { toPublicUser } from './utils';
 
 router.get('/', async (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).send({ message: 'Not logged in' });
+    return;
+  }
   console.log('fetching users');
   const users = await db.getUsers();
   res.send(users.map(toPublicUser));
 });
 
 router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
+  if (!req.user) {
+    res.status(401).send({ message: 'Not logged in' });
+    return;
+  }
   const username = req.params.id.toLowerCase();
   console.log(`Retrieving details for user: ${username}`);
   const user = await db.findUser(username);
