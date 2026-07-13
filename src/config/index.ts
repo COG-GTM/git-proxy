@@ -230,14 +230,23 @@ export const getAPIs = () => {
   return config.api || {};
 };
 
+const INSECURE_DEFAULT_COOKIE_SECRET = 'cookie secret';
+
 export const getCookieSecret = (): string => {
   const config = loadFullConfiguration();
+  const secret = config.cookieSecret;
 
-  if (!config.cookieSecret) {
-    throw new Error('cookieSecret is not set!');
+  if (!secret || secret === INSECURE_DEFAULT_COOKIE_SECRET) {
+    const msg =
+      'Insecure or missing cookieSecret: set GIT_PROXY_COOKIE_SECRET (or cookieSecret in config) to a strong random value.';
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(msg);
+    }
+    console.warn(`WARNING: ${msg}`);
+    return secret || INSECURE_DEFAULT_COOKIE_SECRET;
   }
 
-  return config.cookieSecret;
+  return secret;
 };
 
 export const getSessionMaxAgeHours = (): number => {
