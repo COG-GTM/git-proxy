@@ -84,6 +84,7 @@ describe('login', () => {
       const cookie = await loginAsAdmin();
       const res = await request(app).post('/api/auth/logout').set('Cookie', cookie);
       expect(res.status).toBe(200);
+      expect(res.body).toEqual({ isAuth: false, user: null });
     });
 
     it('test cannot access profile page', async () => {
