@@ -157,6 +157,7 @@ async function createApp(proxy: Proxy): Promise<Express> {
       cookie: {
         secure: 'auto',
         httpOnly: true,
+        sameSite: 'lax',
         maxAge: (config.getSessionMaxAgeHours() || DEFAULT_SESSION_MAX_AGE_HOURS) * 60 * 60 * 1000,
       },
     }),
