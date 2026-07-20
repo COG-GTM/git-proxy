@@ -15,6 +15,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
+import crypto from 'crypto';
 
 import defaultSettings from '../../proxy.config.json';
 import { GitProxyConfig, Convert } from './generated/config';
@@ -230,14 +231,30 @@ export const getAPIs = () => {
   return config.api || {};
 };
 
+// Known-weak default that historically shipped in proxy.config.json. Treated as unset.
+const WEAK_DEFAULT_COOKIE_SECRET = 'cookie secret';
+
+// Cached ephemeral secret, generated once per process when no real secret is configured.
+let _generatedCookieSecret: string | null = null;
+
 export const getCookieSecret = (): string => {
   const config = loadFullConfiguration();
 
-  if (!config.cookieSecret) {
-    throw new Error('cookieSecret is not set!');
+  if (config.cookieSecret && config.cookieSecret !== WEAK_DEFAULT_COOKIE_SECRET) {
+    return config.cookieSecret;
   }
 
-  return config.cookieSecret;
+  if (!_generatedCookieSecret) {
+    _generatedCookieSecret = crypto.randomBytes(32).toString('hex');
+    console.warn(
+      'cookieSecret is not set (or uses the known-weak default). A random ephemeral ' +
+        'secret was generated for this process. Sessions will NOT persist across restarts ' +
+        'or multiple instances. Set the GIT_PROXY_COOKIE_SECRET environment variable (or ' +
+        'cookieSecret in your config) to a strong secret for production deployments.',
+    );
+  }
+
+  return _generatedCookieSecret;
 };
 
 export const getSessionMaxAgeHours = (): number => {
