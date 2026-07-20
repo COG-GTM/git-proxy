@@ -15,6 +15,7 @@
  */
 
 import express, { Request, Response, NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
 import { getPassport, authStrategies } from '../passport';
 import { getAuthMethods } from '../../config';
 
@@ -71,6 +72,19 @@ const getLoginStrategy = () => {
   return enabledAppropriateLoginStrategies[0].type.toLowerCase();
 };
 
+// Dedicated stricter rate limiter for the login route to mitigate
+// brute-force and credential-stuffing attacks. Only failed attempts count
+// (skipSuccessfulRequests), and it is disabled in the test environment.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { message: 'Too many login attempts, please try again later.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
 const loginSuccessHandler = () => async (req: Request, res: Response) => {
   try {
     const currentUser = toPublicUser({ ...req.user } as User);
@@ -105,6 +119,7 @@ router.get('/config', (req, res) => {
 // TODO: if providing separate auth methods, inform the frontend so it has relevant UI elements and appropriate client-side behavior
 router.post(
   '/login',
+  loginLimiter,
   (req: Request, res: Response, next: NextFunction) => {
     const authType = getLoginStrategy();
     if (authType === null) {
