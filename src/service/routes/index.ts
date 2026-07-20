@@ -23,6 +23,7 @@ import users from './users';
 import healthcheck from './healthcheck';
 import config from './config';
 import { jwtAuthHandler } from '../passport/jwtAuthHandler';
+import { ensureAuthenticated } from '../passport/ensureAuthenticated';
 import { Proxy } from '../../proxy';
 
 const routes = (proxy: Proxy) => {
@@ -30,9 +31,9 @@ const routes = (proxy: Proxy) => {
   router.use('/api', home);
   router.use('/api/auth', auth.router);
   router.use('/api/v1/healthcheck', healthcheck);
-  router.use('/api/v1/push', jwtAuthHandler(), push);
-  router.use('/api/v1/repo', jwtAuthHandler(), repo(proxy));
-  router.use('/api/v1/user', jwtAuthHandler(), users);
+  router.use('/api/v1/push', jwtAuthHandler(), ensureAuthenticated, push);
+  router.use('/api/v1/repo', jwtAuthHandler(), ensureAuthenticated, repo(proxy));
+  router.use('/api/v1/user', jwtAuthHandler(), ensureAuthenticated, users);
   router.use('/api/v1/config', config);
   return router;
 };
