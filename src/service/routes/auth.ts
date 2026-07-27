@@ -146,9 +146,12 @@ router.get('/openidconnect/callback', (req: Request, res: Response, next: NextFu
 router.post('/logout', (req: Request, res: Response, next: NextFunction) => {
   req.logout((err: unknown) => {
     if (err) return next(err);
+    req.session.destroy((destroyErr: unknown) => {
+      if (destroyErr) return next(destroyErr);
+      res.clearCookie('connect.sid');
+      res.send({ isAuth: false, user: null });
+    });
   });
-  res.clearCookie('connect.sid');
-  res.send({ isAuth: req.isAuthenticated(), user: req.user });
 });
 
 router.get('/profile', async (req: Request, res: Response) => {
