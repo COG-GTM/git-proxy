@@ -37,6 +37,8 @@ router.get('/', async (req: Request, res: Response) => {
   for (const key in req.query) {
     if (!key) continue;
     if (key === 'limit' || key === 'skip') continue;
+    // Reject MongoDB operator keys and dotted paths to prevent NoSQL/operator injection
+    if (key.startsWith('$') || key.includes('.')) continue;
 
     const rawValue = req.query[key];
     let parsedValue: boolean | undefined;
