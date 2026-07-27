@@ -125,9 +125,18 @@ function corsOriginCallback(
   callback(new Error('Not allowed by CORS'));
 }
 
-const corsOptions: cors.CorsOptions = {
+/**
+ * Determines whether credentials (cookies, authorization headers) may be allowed.
+ * Never allow credentials with a wildcard origin: the browser would otherwise let
+ * any site make authenticated cross-origin requests with the user's session cookie.
+ * @return {boolean} true if credentials can safely be allowed
+ */
+function areCredentialsAllowed(): boolean {
+  return getAllowedOrigins() !== '*';
+}
+
+const baseCorsOptions: cors.CorsOptions = {
   origin: corsOriginCallback,
-  credentials: true, // Allow credentials (cookies, authorization headers)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-TOKEN'],
   exposedHeaders: ['Set-Cookie'],
@@ -144,7 +153,7 @@ async function createApp(proxy: Proxy): Promise<Express> {
   // Before we can bind the routes - we need the passport strategy
   const passport = await configure();
   const absBuildPath = path.join(__dirname, '../../build');
-  app.use(cors(corsOptions));
+  app.use(cors({ ...baseCorsOptions, credentials: areCredentialsAllowed() }));
   app.set('trust proxy', 1);
   app.use(limiter);
 
