@@ -80,10 +80,39 @@ describe('login', () => {
       expect(res.status).toBe(400);
     });
 
+    it('should not reuse a pre-login session id when logging in', async () => {
+      const firstCookie = await loginAsAdmin();
+
+      const res = await request(app).post('/api/auth/login').set('Cookie', firstCookie).send({
+        username: 'admin',
+        password: 'admin',
+      });
+      expect(res.status).toBe(200);
+
+      let secondCookie = '';
+      (res.headers['set-cookie'] as unknown as string[]).forEach((x: string) => {
+        if (x.startsWith('connect')) {
+          secondCookie = x.split(';')[0];
+        }
+      });
+
+      expect(secondCookie).toBeTruthy();
+      expect(secondCookie).not.toBe(firstCookie);
+
+      // the new session is authenticated
+      const newSessionRes = await request(app).get('/api/auth/profile').set('Cookie', secondCookie);
+      expect(newSessionRes.status).toBe(200);
+
+      // the pre-login session is no longer usable
+      const oldSessionRes = await request(app).get('/api/auth/profile').set('Cookie', firstCookie);
+      expect(oldSessionRes.status).toBe(401);
+    });
+
     it('should now be able to logout', async () => {
       const cookie = await loginAsAdmin();
       const res = await request(app).post('/api/auth/logout').set('Cookie', cookie);
       expect(res.status).toBe(200);
+      expect(res.body).toEqual({ isAuth: false, user: null });
     });
 
     it('test cannot access profile page', async () => {

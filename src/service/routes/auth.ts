@@ -71,9 +71,40 @@ const getLoginStrategy = () => {
   return enabledAppropriateLoginStrategies[0].type.toLowerCase();
 };
 
+const logInToSession = (req: Request, user: Express.User): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    req.logIn(user, (err: unknown) => (err ? reject(err) : resolve()));
+  });
+
+/**
+ * Regenerates the session after a successful authentication and re-attaches the
+ * authenticated user to the new session, mitigating session fixation attacks.
+ * When no session is available (e.g. a request without session middleware) the
+ * user is simply attached to the request.
+ */
+const regenerateSession = async (req: Request, user: Express.User): Promise<void> => {
+  const session = req.session;
+  if (typeof session?.regenerate !== 'function') {
+    if (typeof req.logIn === 'function') {
+      await logInToSession(req, user);
+    }
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    session.regenerate((err: unknown) => (err ? reject(err) : resolve()));
+  });
+  await logInToSession(req, user);
+  await new Promise<void>((resolve, reject) => {
+    req.session.save((err: unknown) => (err ? reject(err) : resolve()));
+  });
+};
+
 const loginSuccessHandler = () => async (req: Request, res: Response) => {
   try {
-    const currentUser = toPublicUser({ ...req.user } as User);
+    const user = req.user as Express.User;
+    const currentUser = toPublicUser({ ...user } as User);
+    await regenerateSession(req, user);
     console.log(
       `serivce.routes.auth.login: user logged in, username=${
         currentUser.username
@@ -131,14 +162,15 @@ router.get('/openidconnect/callback', (req: Request, res: Response, next: NextFu
         console.error('No user found:', info);
         return res.status(401).end();
       }
-      req.logIn(user, (err) => {
-        if (err) {
-          console.error('Login error:', err);
-          return res.status(500).end();
-        }
-        console.log('Logged in successfully. User:', user);
-        return res.redirect(`${uiHost}:${uiPort}/dashboard/profile`);
-      });
+      regenerateSession(req, user as Express.User)
+        .then(() => {
+          console.log('Logged in successfully. User:', user);
+          res.redirect(`${uiHost}:${uiPort}/dashboard/profile`);
+        })
+        .catch((error: unknown) => {
+          handleErrorAndLog(error, 'Login error');
+          res.status(500).end();
+        });
     },
   )(req, res, next);
 });
@@ -146,9 +178,17 @@ router.get('/openidconnect/callback', (req: Request, res: Response, next: NextFu
 router.post('/logout', (req: Request, res: Response, next: NextFunction) => {
   req.logout((err: unknown) => {
     if (err) return next(err);
+    if (typeof req.session?.destroy !== 'function') {
+      res.clearCookie('connect.sid');
+      res.send({ isAuth: false, user: null });
+      return;
+    }
+    req.session.destroy((destroyErr: unknown) => {
+      if (destroyErr) return next(destroyErr);
+      res.clearCookie('connect.sid');
+      res.send({ isAuth: false, user: null });
+    });
   });
-  res.clearCookie('connect.sid');
-  res.send({ isAuth: req.isAuthenticated(), user: req.user });
 });
 
 router.get('/profile', async (req: Request, res: Response) => {
