@@ -20,27 +20,18 @@ import * as db from '../../db';
 import { getProxyURL } from '../urls';
 import { getAllProxiedHosts } from '../../db';
 import { RepoQuery } from '../../db/types';
-import { isAdminUser } from './utils';
+import { buildQuery, isAdminUser } from './utils';
 import { Proxy } from '../../proxy';
 import { handleErrorAndLog } from '../../utils/errors';
+
+const REPO_QUERY_KEYS = ['name', 'url', 'project'] as const;
 
 function repo(proxy: Proxy) {
   const router = express.Router();
 
   router.get('/', async (req: Request, res: Response) => {
     const proxyURL = getProxyURL(req);
-    const query: Partial<RepoQuery> = {};
-
-    for (const key in req.query) {
-      if (!key) continue;
-      if (key === 'limit' || key === 'skip') continue;
-
-      const rawValue = req.query[key];
-      let parsedValue: boolean | undefined;
-      if (rawValue === 'false') parsedValue = false;
-      if (rawValue === 'true') parsedValue = true;
-      query[key] = parsedValue ?? rawValue?.toString();
-    }
+    const query = buildQuery<RepoQuery>(req.query, REPO_QUERY_KEYS);
 
     const qd = await db.getRepos(query);
     res.send(qd.map((d) => ({ ...d, proxyURL })));
