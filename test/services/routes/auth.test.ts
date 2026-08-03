@@ -245,6 +245,77 @@ describe('Auth API', () => {
         },
       });
     });
+
+    it('should regenerate the session and re-attach the user before responding', async () => {
+      const user = { username: 'bob' };
+      const calls: string[] = [];
+
+      const session = {
+        regenerate: vi.fn((cb: (err?: unknown) => void) => {
+          calls.push('regenerate');
+          cb();
+        }),
+        save: vi.fn((cb: (err?: unknown) => void) => {
+          calls.push('save');
+          cb();
+        }),
+      };
+      const logIn = vi.fn((_user: unknown, cb: (err?: unknown) => void) => {
+        calls.push('logIn');
+        cb();
+      });
+      const sendSpy = vi.fn(() => calls.push('send'));
+
+      await authRoutes.loginSuccessHandler()(
+        { user, session, logIn } as unknown as Request,
+        { send: sendSpy } as unknown as Response,
+      );
+
+      expect(logIn).toHaveBeenCalledWith(user, expect.any(Function));
+      expect(calls).toEqual(['regenerate', 'logIn', 'save', 'send']);
+    });
+
+    it('should return 500 if the session cannot be regenerated', async () => {
+      const session = {
+        regenerate: vi.fn((cb: (err?: unknown) => void) => cb(new Error('store unavailable'))),
+        save: vi.fn(),
+      };
+      const statusSpy = vi.fn().mockReturnThis();
+      const sendSpy = vi.fn().mockReturnThis();
+      const res = { status: statusSpy, send: sendSpy, end: vi.fn() };
+
+      await authRoutes.loginSuccessHandler()(
+        { user: { username: 'bob' }, session, logIn: vi.fn() } as unknown as Request,
+        res as unknown as Response,
+      );
+
+      expect(statusSpy).toHaveBeenCalledWith(500);
+      expect(session.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /logout', () => {
+    it('should destroy the session and report the user as unauthenticated', async () => {
+      const destroy = vi.fn((cb: (err?: unknown) => void) => cb());
+      const logout = vi.fn((cb: (err?: unknown) => void) => cb());
+
+      const app = express();
+      app.use(express.json());
+      app.use((req, _res, next) => {
+        req.user = { username: 'bob' };
+        req.logout = logout as unknown as Request['logout'];
+        (req as unknown as { session: unknown }).session = { destroy };
+        next();
+      });
+      app.use('/auth', authRoutes.router);
+
+      const res = await request(app).post('/auth/logout');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ isAuth: false, user: null });
+      expect(logout).toHaveBeenCalledOnce();
+      expect(destroy).toHaveBeenCalledOnce();
+    });
   });
 
   describe('GET /profile', () => {
