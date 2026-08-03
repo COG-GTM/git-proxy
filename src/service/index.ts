@@ -59,15 +59,24 @@ const getServiceTLSOptions = () => ({
  *
  * Configuration Options:
  * 1. Production (restrictive): ALLOWED_ORIGINS='https://gitproxy.company.com,https://gitproxy-staging.company.com'
- * 2. Development (permissive): ALLOWED_ORIGINS='*'
+ * 2. Development only (permissive): ALLOWED_ORIGINS='*'
  * 3. Local dev with Vite: ALLOWED_ORIGINS='http://localhost:3000'
  * 4. Same-origin only: Leave ALLOWED_ORIGINS unset or empty
  *
  * Examples:
  * - Single origin: ALLOWED_ORIGINS='https://example.com'
  * - Multiple origins: ALLOWED_ORIGINS='http://localhost:3000,https://example.com'
- * - All origins (testing): ALLOWED_ORIGINS='*'
+ * - All origins (development only): ALLOWED_ORIGINS='*'
  * - Same-origin only: ALLOWED_ORIGINS='' or unset
+ *
+ * Credentialed requests:
+ * Cookies and Authorization headers are only accepted cross-origin when the
+ * requesting origin is explicitly listed in ALLOWED_ORIGINS. With
+ * ALLOWED_ORIGINS='*' the `cors` package reflects the requesting origin
+ * alongside `Access-Control-Allow-Credentials: true`, which would let any
+ * website ride a user's session. The wildcard is therefore only honoured when
+ * NODE_ENV !== 'production' (and logs a warning on startup); in production a
+ * '*' value is ignored and cross-origin requests are rejected.
  */
 
 /**
@@ -125,14 +134,45 @@ function corsOriginCallback(
   callback(new Error('Not allowed by CORS'));
 }
 
-const corsOptions: cors.CorsOptions = {
-  origin: corsOriginCallback,
-  credentials: true, // Allow credentials (cookies, authorization headers)
+const CORS_BASE_OPTIONS: cors.CorsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-TOKEN'],
-  exposedHeaders: ['Set-Cookie'],
   maxAge: 86400, // 24 hours
 };
+
+/**
+ * Whether a wildcard ALLOWED_ORIGINS value may be honoured.
+ * @return {boolean} true outside of production deployments
+ */
+function isWildcardCorsAllowed(): boolean {
+  return process.env.NODE_ENV !== 'production';
+}
+
+/**
+ * CORS options delegate - resolves the options for a single request.
+ *
+ * `credentials` is decided alongside the origin so that origin reflection is
+ * never combined with `Access-Control-Allow-Credentials: true` for a wildcard
+ * configuration in production.
+ * @param {express.Request} _req the incoming request
+ * @param {Function} callback receives the CORS options to apply
+ */
+function corsOptionsDelegate(
+  _req: express.Request,
+  callback: (err: Error | null, options?: cors.CorsOptions) => void,
+): void {
+  if (getAllowedOrigins() === '*' && !isWildcardCorsAllowed()) {
+    // Wildcard ignored in production: no reflected origin, no credentials.
+    return callback(null, { ...CORS_BASE_OPTIONS, origin: false, credentials: false });
+  }
+
+  return callback(null, {
+    ...CORS_BASE_OPTIONS,
+    origin: corsOriginCallback,
+    credentials: true, // Allow credentials (cookies, authorization headers)
+    exposedHeaders: ['Set-Cookie'],
+  });
+}
 
 /**
  * Internal function used to bootstrap the Git Proxy API's express application.
@@ -144,7 +184,16 @@ async function createApp(proxy: Proxy): Promise<Express> {
   // Before we can bind the routes - we need the passport strategy
   const passport = await configure();
   const absBuildPath = path.join(__dirname, '../../build');
-  app.use(cors(corsOptions));
+  if (getAllowedOrigins() === '*') {
+    console.warn(
+      isWildcardCorsAllowed()
+        ? "WARNING: ALLOWED_ORIGINS='*' permits credentialed cross-origin requests from any " +
+            'website. Use an explicit list of origins - this value is ignored in production.'
+        : "WARNING: ALLOWED_ORIGINS='*' is not permitted in production and has been ignored; " +
+            'cross-origin requests are rejected. Set an explicit list of origins.',
+    );
+  }
+  app.use(cors(corsOptionsDelegate));
   app.set('trust proxy', 1);
   app.use(limiter);
 
@@ -155,8 +204,9 @@ async function createApp(proxy: Proxy): Promise<Express> {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: 'auto',
+        secure: config.getTLSEnabled() ? true : 'auto',
         httpOnly: true,
+        sameSite: 'lax',
         maxAge: (config.getSessionMaxAgeHours() || DEFAULT_SESSION_MAX_AGE_HOURS) * 60 * 60 * 1000,
       },
     }),
