@@ -1,0 +1,134 @@
+{
+  "cookieSecret": "replace-me-with-a-long-random-string",
+  "sessionMaxAgeHours": 12,
+  "contactEmail": "gitproxy-admins@acme.example",
+  "authorisedList": [
+    {
+      "project": "acme-bank/platform",
+      "name": "payments-api",
+      "url": "https://gitlab.com/acme-bank/platform/payments-api.git"
+    },
+    {
+      "project": "gitlab-community",
+      "name": "meta",
+      "url": "https://gitlab.com/gitlab-community/meta.git"
+    },
+    {
+      "project": "platform/payments",
+      "name": "api",
+      "url": "https://gitlab.example.internal/platform/payments/api.git"
+    },
+    {
+      "project": "security/restricted",
+      "name": "fraud-models",
+      "url": "https://gitlab.example.internal/security/restricted/fraud-models.git"
+    }
+  ],
+  "sink": [
+    {
+      "type": "fs",
+      "enabled": true
+    },
+    {
+      "type": "mongo",
+      "connectionString": "mongodb://localhost:27017/gitproxy",
+      "options": {
+        "useNewUrlParser": true,
+        "useUnifiedTopology": true,
+        "tlsAllowInvalidCertificates": false,
+        "ssl": true
+      },
+      "enabled": false
+    }
+  ],
+  "authentication": [
+    {
+      "type": "local",
+      "enabled": true
+    }
+  ],
+  "api": {
+    "gitleaks": {
+      "enabled": true,
+      "ignoreGitleaksAllow": true,
+      "noColor": true
+    }
+  },
+  "commitConfig": {
+    "author": {
+      "email": {
+        "domain": {
+          "allow": "^(eng\\.)?acme\\.example$"
+        },
+        "local": {
+          "block": "^(no-?reply|root|admin|administrator|gitlab|git|ci|bot|test)$|\\+"
+        }
+      }
+    },
+    "message": {
+      "block": {
+        "literals": ["DO NOT MERGE", "DONOTMERGE", "[skip ci]", "[ci skip]"],
+        "patterns": [
+          "^\\s*(wip|draft)\\b",
+          "^\\s*(fixup|squash|amend)!",
+          "\\bdo[\\s_-]*not[\\s_-]*merge\\b",
+          "^\\s*temp(orary)?\\s+commit\\b"
+        ]
+      }
+    },
+    "diff": {
+      "block": {
+        "literals": ["ACME-CONFIDENTIAL", "gitlab.example.internal:5050/internal-only"],
+        "patterns": ["-----BEGIN ((RSA|EC|DSA|OPENSSH|PGP|ENCRYPTED) )?PRIVATE KEY( BLOCK)?-----"],
+        "providers": {
+          "GitLab personal/project/group access token": "glpat-[0-9A-Za-z_-]{20}",
+          "GitLab runner authentication token": "glrt-[0-9A-Za-z_-]{20}",
+          "GitLab deploy token": "gldt-[0-9A-Za-z_-]{20}",
+          "GitLab pipeline trigger token": "glptt-[0-9a-f]{40}",
+          "AWS access key ID": "\\b(AKIA|ASIA)[0-9A-Z]{16}\\b"
+        }
+      }
+    }
+  },
+  "privateOrganizations": ["platform/security-test-fixtures"],
+  "attestationConfig": {
+    "questions": [
+      {
+        "label": "I have reviewed the full diff and it matches the linked ticket / GitLab issue",
+        "tooltip": {
+          "text": "Every change must trace to an approved Jira ticket or GitLab issue (change management control).",
+          "links": []
+        }
+      },
+      {
+        "label": "The change contains no credentials, customer data (PII/PCI) or production extracts",
+        "tooltip": {
+          "text": "Automated scanning (gitleaks and the diff rules) is not exhaustive. Check test fixtures, logs and sample data by hand.",
+          "links": []
+        }
+      },
+      {
+        "label": "The author is permitted to contribute to this repository and the code may leave the internal network",
+        "tooltip": {
+          "text": "Confirm the contribution respects export control, licensing and open-source contribution policy.",
+          "links": []
+        }
+      },
+      {
+        "label": "A separate GitLab merge request with an independent approver will be used to merge into a protected branch",
+        "tooltip": {
+          "text": "Segregation of duties: GitProxy approval does not replace the GitLab MR approval rule.",
+          "links": []
+        }
+      }
+    ]
+  },
+  "domains": {},
+  "urlShortener": "",
+  "csrfProtection": true,
+  "plugins": [
+    "./examples/gitlab/plugins/require-ticket-reference.js",
+    "./examples/gitlab/plugins/protect-branches.js",
+    "./examples/gitlab/plugins/restrict-group-clones.js"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@example/git-proxy-gitlab-policies",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Example GitProxy push/pull plugins for fronting GitLab (gitlab.com or self-hosted).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./require-ticket-reference": "./require-ticket-reference.js",
+    "./protect-branches": "./protect-branches.js",
+    "./restrict-group-clones": "./restrict-group-clones.js",
+    "./lib/policies": "./lib/policies.js"
+  },
+  "peerDependencies": {
+    "@finos/git-proxy": "^2.0.0"
+  }
+}
