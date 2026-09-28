@@ -121,6 +121,19 @@ git remote add proxy http://localhost:8000/gitlab.com/<group>/<repo>.git
 git clone http://localhost:8000/gitlab.example.internal/platform/payments/api.git
 ```
 
+`http://localhost` is only acceptable when GitProxy runs on the developer's own machine. The PAT
+travels in a Basic-auth header, so for a shared or remote GitProxy enable TLS on the proxy and
+use `https://` remotes (default HTTPS proxy port `8443`, or put GitProxy behind a TLS-terminating
+load balancer):
+
+```json
+"tls": { "enabled": true, "key": "/etc/git-proxy/tls/key.pem", "cert": "/etc/git-proxy/tls/cert.pem" }
+```
+
+```sh
+git remote add proxy https://git-proxy.acme.example:8443/gitlab.com/<group>/<repo>.git
+```
+
 Git prompts for a username and password: use the **GitLab username** and the **PAT**. GitProxy
 forwards the Basic-auth header to GitLab and reuses it to clone the repository for inspection;
 it does not store it. Cache it with a credential helper instead of embedding it in the URL:
@@ -231,7 +244,7 @@ changes still always go to manual review.
 This is implemented in the hook rather than as a plugin on purpose: push plugins run straight
 after `parsePush`, before GitProxy has cloned the repository and applied the pack, so only commit
 metadata (messages, authors, branch) is available there, not the list of changed files. The hook
-runs inside the clone after `writePack` and can use `git diff-tree`. Override the paths with
+runs inside the clone after `writePack` and can use `git diff-tree -c` on every pushed commit, including edits made while resolving merges. Override the paths with
 `GITPROXY_SENSITIVE_PATH_PATTERN` (extended regex).
 
 ### Pre-receive hook: size, binaries, docs-only
@@ -271,8 +284,13 @@ one; the push page shows it as rejected. Set `GITPROXY_HOOK_LOG` to keep the rea
 - `commitConfig.diff.block.patterns`: PEM/OpenSSH/PGP private key headers.
 - `commitConfig.diff.block.literals`: internal markers such as `ACME-CONFIDENTIAL` and an
   internal-only registry path.
-- `privateOrganizations`: repositories whose URL contains `platform/security-test-fixtures` are
-  exempt from the diff rules (they intentionally contain fake credentials).
+- `privateOrganizations`: repositories whose project (the URL path before the repository name)
+  is exactly `platform/security-test-fixtures` skip the `providers` rules, so fake GitLab/AWS
+  tokens in test fixtures are allowed. The `literals` and `patterns` rules (including the
+  private-key header) and gitleaks still apply to them: GitProxy has no per-repository exemption
+  for those, so fixture repos that need fake private keys must use a `.gitleaksignore` /
+  `gitleaks:allow` comment and a key format the `patterns` rule does not match, or be pushed
+  outside the proxy.
 - `api.gitleaks`: runs `gitleaks` on the pushed range. **The `gitleaks` binary must be on
   GitProxy's `PATH`**, otherwise every push fails at the gitleaks step. Remove the block or set
   `enabled: false` if you cannot install it.
@@ -294,8 +312,10 @@ $ git clone http://testuser:<PAT>@localhost:8000/localhost:8443/test-owner/test-
 fatal: invalid ls-refs response: ?	Clone/fetch blocked by policy "restrictGroupClones": localhost:8443/test-owner is a restricted group and "testuser" is not on the reader allowlist.
 ```
 
-The username is whatever the client sends; GitLab checks the token, not GitProxy. Treat this as an
-audit trail on top of GitLab group permissions, not a replacement. Pull plugins run on the
+The username is whatever the client sends. GitProxy does not verify that the PAT belongs to that
+user, and GitLab may accept a valid PAT with any username, so anyone with a token for the group
+can claim an allowlisted name. Treat this as an audit trail and a guard against accidental clones
+on top of GitLab group permissions, never as the access control itself. Pull plugins run on the
 `git-upload-pack` request (the actual fetch), not on the ref advertisement, so `git ls-remote`
 still works against GitLab's own permissions.
 

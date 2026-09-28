@@ -70,6 +70,11 @@ approve() {
   exit 0
 }
 
+for pattern_var in SENSITIVE_PATH_PATTERN DOCS_PATH_PATTERN; do
+  grep -Eq -- "${!pattern_var}" <<<"" 2>/dev/null
+  (($? <= 1)) || review "invalid regular expression in GITPROXY_${pattern_var}"
+done
+
 read -r old new ref || review "no ref update received on stdin"
 [[ -n "${new:-}" && ! "$new" =~ $ZERO_COMMIT_PATTERN ]] || review "branch deletion or empty update for ${ref:-unknown ref}"
 git cat-file -e "${new}^{commit}" 2>/dev/null || review "commit $new not found in $(pwd)"
@@ -82,10 +87,12 @@ else
 fi
 [[ -n "$commits" ]] || review "no new commits between ${old:-<none>} and $new"
 
-# Raw diff-tree lines: ":<old mode> <new mode> <old sha> <new sha> <status>\t<path>"
+# Raw diff-tree lines: ":<old mode> <new mode> <old sha> <new sha> <status>\t<path>".
+# -c adds merge commits as combined diffs ("::<modes...> <shas...> <status>\t<path>"), so edits
+# made while resolving a merge are inspected too.
 changes="$(
   for commit in $commits; do
-    git -c core.quotePath=false diff-tree -r --root --no-commit-id --no-renames "$commit"
+    git -c core.quotePath=false diff-tree -r -c --root --no-commit-id --no-renames "$commit" || exit 1
   done
 )" || review "unable to compute changed files"
 [[ -n "$changes" ]] || review "push contains no file changes"
@@ -95,8 +102,12 @@ changed_paths=()
 while IFS=$'\t' read -r meta path; do
   [[ -n "$path" ]] || continue
   changed_paths+=("$path")
-  read -r _old_mode new_mode _old_sha new_sha status <<<"${meta#:}"
-  if [[ "$status" == "D" || "$new_mode" == "160000" ]]; then
+  colons="${meta%%[!:]*}"
+  parents=${#colons}
+  read -r -a fields <<<"${meta#"$colons"}"
+  new_mode="${fields[parents]}"
+  new_sha="${fields[2 * parents + 1]}"
+  if [[ "$new_sha" =~ ^0+$ || "$new_mode" == "160000" ]]; then
     continue # deletions and submodule pointers carry no blob
   fi
   size="$(git cat-file -s "$new_sha" 2>/dev/null)" || review "unable to read blob for $path"

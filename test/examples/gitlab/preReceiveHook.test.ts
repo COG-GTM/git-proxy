@@ -141,6 +141,52 @@ describe.skipIf(process.platform === 'win32')('GitLab example pre-receive hook',
     expect(runHook(base, head).status).toBe(1);
   });
 
+  describe('merge commits', () => {
+    const mergeWith = (files: Record<string, string>) => {
+      git('checkout', '-q', '-b', 'side');
+      commitFiles({ 'docs/side.md': 'side\n' });
+      git('checkout', '-q', 'main');
+      commitFiles({ 'docs/main.md': 'main\n' });
+      git('merge', '-q', '--no-ff', '--no-commit', 'side');
+      for (const [file, content] of Object.entries(files)) {
+        write(file, content);
+      }
+      git('add', '-A');
+      git('commit', '-q', '-m', 'PAY-1: merge side');
+      return git('rev-parse', 'HEAD');
+    };
+
+    it('auto-approves a clean merge of documentation-only branches (exit 0)', () => {
+      expect(runHook(base, mergeWith({})).status).toBe(0);
+    });
+
+    it('requires review for source edits made while resolving the merge (exit 2)', () => {
+      const result = runHook(base, mergeWith({ 'src/app.js': 'console.log(3);\n' }));
+      expect(result.status).toBe(2);
+      expect(result.output).toContain('src/app.js');
+    });
+
+    it('rejects sensitive paths and blocked files introduced only by the merge (exit 1)', () => {
+      expect(runHook(base, mergeWith({ '.gitlab-ci.yml': 'stages: [x]\n' })).status).toBe(1);
+    });
+
+    it('rejects blocked extensions introduced only by the merge (exit 1)', () => {
+      const result = runHook(base, mergeWith({ 'lib/vendor.jar': 'binary' }));
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('lib/vendor.jar has a blocked file extension');
+    });
+  });
+
+  it.each([['GITPROXY_DOCS_PATH_PATTERN'], ['GITPROXY_SENSITIVE_PATH_PATTERN']])(
+    'falls back to manual review when %s is not a valid regex (exit 2)',
+    (variable) => {
+      const head = commitFiles({ 'src/app.js': 'console.log(2);\n' });
+      const result = runHook(base, head, { [variable]: '[' });
+      expect(result.status).toBe(2);
+      expect(result.output).toContain(`invalid regular expression in ${variable}`);
+    },
+  );
+
   it.each([['.gitlab-ci.yml'], ['CODEOWNERS'], ['.gitlab/merge_request_templates/default.md']])(
     'rejects changes to sensitive path %s by non-allowlisted pushers (exit 1)',
     (file) => {
