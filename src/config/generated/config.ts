@@ -98,6 +98,10 @@ export interface GitProxyConfig {
    */
   tls?: TLS;
   /**
+   * Exchanging external git credentials for internal upstream tokens
+   */
+  tokenExchange?: TokenExchange;
+  /**
    * UI routes that require authentication (logged in or admin)
    */
   uiRouteAuth?: UIRouteAuth;
@@ -548,6 +552,36 @@ export interface TLS {
 }
 
 /**
+ * Exchanging external git credentials for internal upstream tokens
+ */
+export interface TokenExchange {
+  /**
+   * When true, credentials with no mapping are forwarded unchanged; by default they are
+   * rejected.
+   */
+  allowUnmapped?: boolean;
+  enabled: boolean;
+  mappings?: Mapping[];
+}
+
+export interface Mapping {
+  /**
+   * Hex SHA-256 of the external token/password; the plaintext external token is never stored.
+   */
+  externalTokenSha256: string;
+  externalUsername?: string;
+  /**
+   * Name of the environment variable holding the internal PAT; the PAT itself is never stored
+   * in config.
+   */
+  internalTokenEnv: string;
+  /**
+   * Username sent upstream; defaults to the incoming username.
+   */
+  internalUsername?: string;
+}
+
+/**
  * UI routes that require authentication (logged in or admin)
  */
 export interface UIRouteAuth {
@@ -779,6 +813,7 @@ const typeMap: any = {
       { json: 'sslKeyPemPath', js: 'sslKeyPemPath', typ: u(undefined, '') },
       { json: 'tempPassword', js: 'tempPassword', typ: u(undefined, r('TempPassword')) },
       { json: 'tls', js: 'tls', typ: u(undefined, r('TLS')) },
+      { json: 'tokenExchange', js: 'tokenExchange', typ: u(undefined, r('TokenExchange')) },
       { json: 'uiRouteAuth', js: 'uiRouteAuth', typ: u(undefined, r('UIRouteAuth')) },
       { json: 'urlShortener', js: 'urlShortener', typ: u(undefined, '') },
     ],
@@ -965,6 +1000,23 @@ const typeMap: any = {
       { json: 'key', js: 'key', typ: '' },
     ],
     'any',
+  ),
+  TokenExchange: o(
+    [
+      { json: 'allowUnmapped', js: 'allowUnmapped', typ: u(undefined, true) },
+      { json: 'enabled', js: 'enabled', typ: true },
+      { json: 'mappings', js: 'mappings', typ: u(undefined, a(r('Mapping'))) },
+    ],
+    false,
+  ),
+  Mapping: o(
+    [
+      { json: 'externalTokenSha256', js: 'externalTokenSha256', typ: '' },
+      { json: 'externalUsername', js: 'externalUsername', typ: u(undefined, '') },
+      { json: 'internalTokenEnv', js: 'internalTokenEnv', typ: '' },
+      { json: 'internalUsername', js: 'internalUsername', typ: u(undefined, '') },
+    ],
+    false,
   ),
   UIRouteAuth: o(
     [

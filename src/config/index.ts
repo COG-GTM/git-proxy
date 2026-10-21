@@ -317,6 +317,11 @@ export const getRateLimit = () => {
   return config.rateLimit;
 };
 
+export const getTokenExchange = () => {
+  const config = loadFullConfiguration();
+  return config.tokenExchange;
+};
+
 // Function to handle configuration updates
 const handleConfigUpdate = async (newConfig: Configuration) => {
   console.log('Configuration updated from external source');

@@ -187,6 +187,27 @@ GitProxy ships with a default configuration which can be customised in various w
 
 ### Config parameters
 
+#### Token exchange
+
+Token exchange lets clients authenticate to GitProxy with external Git credentials while GitProxy forwards requests upstream using an internal PAT. External tokens/passwords are stored only as SHA-256 hashes, and internal PATs are read from environment variables.
+
+```json
+"tokenExchange": {
+  "enabled": true,
+  "allowUnmapped": false,
+  "mappings": [
+    {
+      "externalTokenSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "externalUsername": "external-user",
+      "internalTokenEnv": "INTERNAL_GIT_PAT",
+      "internalUsername": "upstream-user"
+    }
+  ]
+}
+```
+
+Compute an external token hash with `printf '%s' "$TOKEN" | sha256sum`. Set the internal PAT in the environment variable named by `internalTokenEnv`; never put the PAT in config. Credentials without a matching mapping are rejected unless `allowUnmapped` is `true`.
+
 #### `cookieSecret`
 
 This is the secret that is passed in to `express-session` for signing the session ID cookie for the **GitProxy API Express app** (not the proxy itself).

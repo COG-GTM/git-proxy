@@ -23,6 +23,7 @@ import { processUrlPath, validGitRequest } from './helper';
 import { getAllProxiedHosts } from '../../db';
 import { ProxyOptions } from 'express-http-proxy';
 import { handleErrorAndLog } from '../../utils/errors';
+import { exchangeToken } from '../tokenExchange';
 
 enum ActionType {
   ALLOWED = 'Allowed',
@@ -246,6 +247,25 @@ const getRouter = async () => {
       res.set('Expires', '0');
       res.set('Surrogate-Control', 'no-store');
       return res.status(200).send('OK');
+    }
+
+    const exchange = exchangeToken(req.headers.authorization);
+    if (exchange.status === 'rejected') {
+      logAction(
+        req.url,
+        req.headers.host,
+        req.headers['user-agent'],
+        ActionType.BLOCKED,
+        exchange.message,
+      );
+      sendErrorResponse(req, res, exchange.message);
+      return;
+    }
+    if (exchange.status === 'exchanged') {
+      req.headers.authorization = exchange.authorization;
+      console.log(
+        `Token exchange: forwarding request as internal user '${exchange.internalUsername}'`,
+      );
     }
 
     console.log(
