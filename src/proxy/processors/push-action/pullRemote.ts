@@ -51,9 +51,10 @@ const exec = async (req: Request, action: Action): Promise<Action> => {
           'Authorization header is required for pullRemote. Make sure to provide valid credentials as anonymous pulls are not currently supported.',
         );
       }
-      const [username, password] = Buffer.from(authHeader.split(' ')[1], 'base64')
-        .toString()
-        .split(':');
+      const decodedAuth = Buffer.from(authHeader.split(' ')[1], 'base64').toString();
+      const separator = decodedAuth.indexOf(':');
+      const username = separator === -1 ? decodedAuth : decodedAuth.slice(0, separator);
+      const password = separator === -1 ? undefined : decodedAuth.slice(separator + 1);
 
       // Note: setting singleBranch to true will cause issues when pushing to
       // a non-default branch as commits from those branches won't be fetched

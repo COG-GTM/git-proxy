@@ -23,6 +23,9 @@ import { processUrlPath, validGitRequest } from './helper';
 import { getAllProxiedHosts } from '../../db';
 import { ProxyOptions } from 'express-http-proxy';
 import { handleErrorAndLog } from '../../utils/errors';
+import { Step } from '../actions';
+import * as proc from '../processors';
+import { exchangeToken } from '../tokenExchange';
 
 enum ActionType {
   ALLOWED = 'Allowed',
@@ -239,13 +242,43 @@ const getRouter = async () => {
 
   console.log('proxy keys registered: ', JSON.stringify(proxyKeys));
 
-  router.use('/', ((req, res, next) => {
+  router.use('/', (async (req, res, next) => {
     if (req.path === '/healthcheck') {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate');
       res.set('Pragma', 'no-cache');
       res.set('Expires', '0');
       res.set('Surrogate-Control', 'no-store');
       return res.status(200).send('OK');
+    }
+
+    const upstreamHost =
+      originsToProxy.find((origin) => req.url.startsWith(`/${origin}/`)) ?? 'github.com';
+    const exchange = exchangeToken(req.headers.authorization, upstreamHost);
+    if (exchange.status === 'rejected') {
+      logAction(
+        req.url,
+        req.headers.host,
+        req.headers['user-agent'],
+        ActionType.BLOCKED,
+        exchange.message,
+      );
+      try {
+        const action = await proc.pre.parseAction(req);
+        const step = new Step('tokenExchange');
+        step.setError(exchange.message);
+        action.addStep(step);
+        await proc.post.audit(req, action);
+      } catch (error: unknown) {
+        handleErrorAndLog(error, 'Failed to audit rejected token exchange');
+      }
+      sendErrorResponse(req, res, exchange.message);
+      return;
+    }
+    if (exchange.status === 'exchanged') {
+      req.headers.authorization = exchange.authorization;
+      console.log(
+        `Token exchange: forwarding request as internal user '${exchange.internalUsername}'`,
+      );
     }
 
     console.log(

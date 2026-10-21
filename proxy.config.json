@@ -5,6 +5,10 @@
     "windowMs": 60000,
     "limit": 1000
   },
+  "tokenExchange": {
+    "enabled": false,
+    "mappings": []
+  },
   "tempPassword": {
     "sendEmail": false,
     "emailConfig": {}

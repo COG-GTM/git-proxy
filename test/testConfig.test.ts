@@ -38,6 +38,7 @@ describe('default configuration', () => {
     expect(config.getTempPasswordConfig()).toEqual(defaultSettings.tempPassword);
     expect(config.getAuthorisedList()).toEqual(defaultSettings.authorisedList);
     expect(config.getRateLimit()).toEqual(defaultSettings.rateLimit);
+    expect(config.getTokenExchange()).toEqual(defaultSettings.tokenExchange);
     expect(config.getTLSKeyPemPath()).toEqual(defaultSettings.tls.key);
     expect(config.getTLSCertPemPath()).toEqual(defaultSettings.tls.cert);
     expect(config.getTLSEnabled()).toEqual(defaultSettings.tls.enabled);

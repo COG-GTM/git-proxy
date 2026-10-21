@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll, vi } from 'vitest';
 import fs from 'fs';
+import git from 'isomorphic-git';
 import { exec as clearBareClone } from '../../src/proxy/processors/post-processor/clearBareClone';
 import { exec as pullRemote } from '../../src/proxy/processors/push-action/pullRemote';
 import { Action } from '../../src/proxy/actions/Action';
@@ -29,6 +30,30 @@ describe('clear local clones', () => {
     //make sure the remote folder exists (normally created on proxy startup)
     if (!fs.existsSync(remoteFolder)) {
       fs.mkdirSync(remoteFolder);
+    }
+  });
+
+  it('pullRemote preserves colons in Basic-auth passwords', async () => {
+    const clone = vi.spyOn(git, 'clone').mockResolvedValue(undefined);
+    const action = new Action('123__789', 'type', 'get', timestamp, 'finos/git-proxy.git');
+    action.url = 'https://github.com/finos/git-proxy.git';
+    const authorization = `Basic ${Buffer.from('user:part:two').toString('base64')}`;
+
+    try {
+      await pullRemote(
+        {
+          headers: {
+            authorization,
+          },
+        },
+        action,
+      );
+
+      const cloneOptions = clone.mock.calls[0][0];
+      const credentials = await cloneOptions.onAuth?.(action.url);
+      expect(credentials).toEqual({ username: 'user', password: 'part:two' });
+    } finally {
+      clone.mockRestore();
     }
   });
 
