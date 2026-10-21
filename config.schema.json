@@ -286,6 +286,13 @@
               "externalUsername": {
                 "type": "string"
               },
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Upstream hosts (e.g. github.com) this mapping may be used for. When omitted, the mapping applies to every proxied host; setting it is recommended when more than one origin is proxied."
+              },
               "internalTokenEnv": {
                 "type": "string",
                 "description": "Name of the environment variable holding the internal PAT; the PAT itself is never stored in config."

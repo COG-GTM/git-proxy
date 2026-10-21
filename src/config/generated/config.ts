@@ -571,6 +571,12 @@ export interface Mapping {
   externalTokenSha256: string;
   externalUsername?: string;
   /**
+   * Upstream hosts (e.g. github.com) this mapping may be used for. When omitted, the mapping
+   * applies to every proxied host; setting it is recommended when more than one origin is
+   * proxied.
+   */
+  hosts?: string[];
+  /**
    * Name of the environment variable holding the internal PAT; the PAT itself is never stored
    * in config.
    */
@@ -1013,6 +1019,7 @@ const typeMap: any = {
     [
       { json: 'externalTokenSha256', js: 'externalTokenSha256', typ: '' },
       { json: 'externalUsername', js: 'externalUsername', typ: u(undefined, '') },
+      { json: 'hosts', js: 'hosts', typ: u(undefined, a('')) },
       { json: 'internalTokenEnv', js: 'internalTokenEnv', typ: '' },
       { json: 'internalUsername', js: 'internalUsername', typ: u(undefined, '') },
     ],

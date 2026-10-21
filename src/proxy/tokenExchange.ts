@@ -27,7 +27,10 @@ const unrecognizedCredentialMessage =
 const misconfiguredCredentialMessage =
   'Token exchange is misconfigured for this credential. Please contact an administrator.';
 
-export const exchangeToken = (authorization: string | undefined): TokenExchangeResult => {
+export const exchangeToken = (
+  authorization: string | undefined,
+  upstreamHost: string,
+): TokenExchangeResult => {
   const tokenExchange = config.getTokenExchange();
   if (!tokenExchange || tokenExchange.enabled !== true) {
     return { status: 'skipped' };
@@ -55,7 +58,15 @@ export const exchangeToken = (authorization: string | undefined): TokenExchangeR
   const username = decoded.slice(0, separatorIndex);
   const token = decoded.slice(separatorIndex + 1);
   const tokenHash = createHash('sha256').update(token).digest();
+  const normalizedUpstreamHost = upstreamHost.toLowerCase();
   const mapping = tokenExchange.mappings?.find((candidate) => {
+    if (
+      candidate.hosts !== undefined &&
+      !candidate.hosts.some((host) => host.toLowerCase() === normalizedUpstreamHost)
+    ) {
+      return false;
+    }
+
     if (candidate.externalUsername !== undefined && username !== candidate.externalUsername) {
       return false;
     }

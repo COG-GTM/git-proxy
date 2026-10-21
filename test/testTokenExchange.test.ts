@@ -22,6 +22,7 @@ import { exchangeToken } from '../src/proxy/tokenExchange';
 const externalToken = 'external-test-token';
 const internalToken = 'internal-test-pat';
 const internalTokenEnv = 'TOKEN_EXCHANGE_TEST_INTERNAL_PAT';
+const upstreamHost = 'github.com';
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 const basicHeader = (username: string, token: string): string =>
@@ -50,12 +51,12 @@ describe('exchangeToken', () => {
     const configSpy = vi.spyOn(config, 'getTokenExchange').mockReturnValue({
       enabled: false,
     });
-    expect(exchangeToken(basicHeader('externalUser', externalToken))).toEqual({
+    expect(exchangeToken(basicHeader('externalUser', externalToken), upstreamHost)).toEqual({
       status: 'skipped',
     });
 
     configSpy.mockReturnValue(undefined);
-    expect(exchangeToken(basicHeader('externalUser', externalToken))).toEqual({
+    expect(exchangeToken(basicHeader('externalUser', externalToken), upstreamHost)).toEqual({
       status: 'skipped',
     });
   });
@@ -63,7 +64,7 @@ describe('exchangeToken', () => {
   it('skips anonymous requests', () => {
     vi.spyOn(config, 'getTokenExchange').mockReturnValue(mappedConfig());
 
-    expect(exchangeToken(undefined)).toEqual({ status: 'skipped' });
+    expect(exchangeToken(undefined, upstreamHost)).toEqual({ status: 'skipped' });
   });
 
   it('exchanges a matching token', () => {
@@ -80,7 +81,7 @@ describe('exchangeToken', () => {
       }),
     );
 
-    const result = exchangeToken(basicHeader('externalUser', externalToken));
+    const result = exchangeToken(basicHeader('externalUser', externalToken), upstreamHost);
 
     expect(result.status).toBe('exchanged');
     if (result.status === 'exchanged') {
@@ -95,7 +96,7 @@ describe('exchangeToken', () => {
     process.env[internalTokenEnv] = internalToken;
     vi.spyOn(config, 'getTokenExchange').mockReturnValue(mappedConfig());
 
-    const result = exchangeToken(basicHeader('externalUser', externalToken));
+    const result = exchangeToken(basicHeader('externalUser', externalToken), upstreamHost);
 
     expect(result.status).toBe('exchanged');
     if (result.status === 'exchanged') {
@@ -119,7 +120,61 @@ describe('exchangeToken', () => {
       }),
     );
 
-    expect(exchangeToken(basicHeader('externalUser', externalToken)).status).toBe('exchanged');
+    expect(exchangeToken(basicHeader('externalUser', externalToken), upstreamHost).status).toBe(
+      'exchanged',
+    );
+  });
+
+  it('matches host-scoped mappings case-insensitively', () => {
+    process.env[internalTokenEnv] = internalToken;
+    vi.spyOn(config, 'getTokenExchange').mockReturnValue(
+      mappedConfig({
+        mappings: [
+          {
+            externalTokenSha256: hashToken(externalToken),
+            internalTokenEnv,
+            hosts: ['github.com'],
+          },
+        ],
+      }),
+    );
+
+    expect(exchangeToken(basicHeader('externalUser', externalToken), 'github.com').status).toBe(
+      'exchanged',
+    );
+    expect(exchangeToken(basicHeader('externalUser', externalToken), 'GitHub.com').status).toBe(
+      'exchanged',
+    );
+  });
+
+  it('rejects a credential whose mapping is scoped to a different host', () => {
+    vi.spyOn(config, 'getTokenExchange').mockReturnValue(
+      mappedConfig({
+        mappings: [
+          {
+            externalTokenSha256: hashToken(externalToken),
+            internalTokenEnv,
+            hosts: ['github.com'],
+          },
+        ],
+      }),
+    );
+
+    expect(exchangeToken(basicHeader('externalUser', externalToken), 'gitlab.example.com')).toEqual(
+      {
+        status: 'rejected',
+        message: 'Token exchange failed: credential not recognised by GitProxy',
+      },
+    );
+  });
+
+  it('allows mappings without hosts for any upstream host', () => {
+    process.env[internalTokenEnv] = internalToken;
+    vi.spyOn(config, 'getTokenExchange').mockReturnValue(mappedConfig());
+
+    expect(
+      exchangeToken(basicHeader('externalUser', externalToken), 'gitlab.example.com').status,
+    ).toBe('exchanged');
   });
 
   it('rejects a mapping with a mismatched external username', () => {
@@ -135,7 +190,7 @@ describe('exchangeToken', () => {
       }),
     );
 
-    expect(exchangeToken(basicHeader('otherUser', externalToken))).toEqual({
+    expect(exchangeToken(basicHeader('otherUser', externalToken), upstreamHost)).toEqual({
       status: 'rejected',
       message: 'Token exchange failed: credential not recognised by GitProxy',
     });
@@ -144,13 +199,13 @@ describe('exchangeToken', () => {
   it('rejects an unmapped token unless allowUnmapped is enabled', () => {
     vi.spyOn(config, 'getTokenExchange').mockReturnValue(mappedConfig());
 
-    expect(exchangeToken(basicHeader('externalUser', 'unmapped-token'))).toEqual({
+    expect(exchangeToken(basicHeader('externalUser', 'unmapped-token'), upstreamHost)).toEqual({
       status: 'rejected',
       message: 'Token exchange failed: credential not recognised by GitProxy',
     });
 
     vi.mocked(config.getTokenExchange).mockReturnValue(mappedConfig({ allowUnmapped: true }));
-    expect(exchangeToken(basicHeader('externalUser', 'unmapped-token'))).toEqual({
+    expect(exchangeToken(basicHeader('externalUser', 'unmapped-token'), upstreamHost)).toEqual({
       status: 'skipped',
     });
   });
@@ -158,13 +213,15 @@ describe('exchangeToken', () => {
   it('rejects or skips non-Basic authorization depending on allowUnmapped', () => {
     vi.spyOn(config, 'getTokenExchange').mockReturnValue(mappedConfig());
 
-    expect(exchangeToken('Bearer external-test-token')).toEqual({
+    expect(exchangeToken('Bearer external-test-token', upstreamHost)).toEqual({
       status: 'rejected',
       message: 'Token exchange failed: credential not recognised by GitProxy',
     });
 
     vi.mocked(config.getTokenExchange).mockReturnValue(mappedConfig({ allowUnmapped: true }));
-    expect(exchangeToken('Bearer external-test-token')).toEqual({ status: 'skipped' });
+    expect(exchangeToken('Bearer external-test-token', upstreamHost)).toEqual({
+      status: 'skipped',
+    });
   });
 
   it('splits credentials on the first colon only', () => {
@@ -182,7 +239,7 @@ describe('exchangeToken', () => {
       }),
     );
 
-    const result = exchangeToken(basicHeader('externalUser', tokenWithColon));
+    const result = exchangeToken(basicHeader('externalUser', tokenWithColon), upstreamHost);
 
     expect(result.status).toBe('exchanged');
     if (result.status === 'exchanged') {
@@ -207,7 +264,7 @@ describe('exchangeToken', () => {
       }),
     );
 
-    const result = exchangeToken(basicHeader('externalUser', sensitiveExternalToken));
+    const result = exchangeToken(basicHeader('externalUser', sensitiveExternalToken), upstreamHost);
 
     expect(result).toEqual({
       status: 'rejected',
