@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { NextFunction, Request, Response } from 'express';
 import { PublicUser, User as DbUser } from '../../db/types';
 
 interface User extends Express.User {
@@ -23,6 +24,14 @@ interface User extends Express.User {
 
 export function isAdminUser(user?: Express.User): user is User & { admin: true } {
   return user !== null && user !== undefined && (user as User).admin === true;
+}
+
+export function requireLogin(req: Request, res: Response, next: NextFunction): void {
+  if (req.user) {
+    next();
+    return;
+  }
+  res.status(401).send({ message: 'Not logged in' });
 }
 
 export const toPublicUser = (user: DbUser): PublicUser => {

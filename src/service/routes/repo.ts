@@ -20,14 +20,14 @@ import * as db from '../../db';
 import { getProxyURL } from '../urls';
 import { getAllProxiedHosts } from '../../db';
 import { RepoQuery } from '../../db/types';
-import { isAdminUser } from './utils';
+import { isAdminUser, requireLogin } from './utils';
 import { Proxy } from '../../proxy';
 import { handleErrorAndLog } from '../../utils/errors';
 
 function repo(proxy: Proxy) {
   const router = express.Router();
 
-  router.get('/', async (req: Request, res: Response) => {
+  router.get('/', requireLogin, async (req: Request, res: Response) => {
     const proxyURL = getProxyURL(req);
     const query: Partial<RepoQuery> = {};
 
@@ -46,7 +46,7 @@ function repo(proxy: Proxy) {
     res.send(qd.map((d) => ({ ...d, proxyURL })));
   });
 
-  router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
+  router.get('/:id', requireLogin, async (req: Request<{ id: string }>, res: Response) => {
     const proxyURL = getProxyURL(req);
     const _id = req.params.id;
     const qd = await db.getRepoById(_id);
