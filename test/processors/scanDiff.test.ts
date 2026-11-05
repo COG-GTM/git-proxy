@@ -262,6 +262,31 @@ describe('Scan commit diff', () => {
     }
   });
 
+  it('should not write the diff or detected secrets to the console log', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const action = new Action('1', 'type', 'method', 1, 'test/repo.git');
+      const diffStep = generateDiffStep(generateMultiLineDiffWithLiteral());
+      action.steps = [diffStep];
+      action.setCommit('8b97e49', 'de18d43');
+
+      const result = await processor.exec({} as Request, action);
+      const scanStep = result.steps.find((s) => s.stepName === 'scanDiff');
+
+      expect(result.error).toBe(true);
+      expect(result.errorMessage).toContain('blocked.Te$t.Literal?');
+
+      const consoleOutput = infoSpy.mock.calls.map((args) => args.join(' ')).join('\n');
+      expect(consoleOutput).toContain('scanDiff - Your push has been blocked.');
+      expect(consoleOutput).not.toContain('blocked.Te$t.Literal?');
+      expect(consoleOutput).not.toContain('AKIAIOSFODNN7EXAMPLE');
+      expect(consoleOutput).not.toContain('diff --git');
+      expect(scanStep?.logs.join('\n')).not.toContain('diff --git');
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
   it('should allow push when no diff is present (legitimate empty diff)', async () => {
     const action = new Action('1', 'type', 'method', 1, 'test/repo.git');
     action.steps = [generateDiffStep(null)];
