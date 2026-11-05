@@ -52,6 +52,43 @@ const isBasicAuthHost = (upstream: URL): boolean =>
   });
 
 /**
+ * The Basic username is only trusted if the server rejects anonymous receive-pack
+ * discovery but accepts it with the presented credentials.
+ */
+const verifyBasicAuthCredentials = async (
+  upstream: URL,
+  authHeader: string,
+  username: string,
+  step: Step,
+): Promise<string | null> => {
+  const url = `${upstream.origin}${upstream.pathname}/info/refs`;
+  const options = {
+    params: { service: 'git-receive-pack' },
+    timeout: IDENTITY_LOOKUP_TIMEOUT_MS,
+    validateStatus: () => true,
+  };
+
+  const anonymous = await axios.get(url, { ...options, headers: { 'User-Agent': 'git-proxy' } });
+  if (anonymous.status !== 401 && anonymous.status !== 403) {
+    step.log(
+      `${upstream.host} does not require authentication for pushes, cannot verify the pusher`,
+    );
+    return null;
+  }
+
+  const authenticated = await axios.get(url, {
+    ...options,
+    headers: { Authorization: authHeader, 'User-Agent': 'git-proxy' },
+  });
+  if (authenticated.status !== 200) {
+    step.log(`${upstream.host} rejected the push credentials (status ${authenticated.status})`);
+    return null;
+  }
+
+  return username || null;
+};
+
+/**
  * Resolves the SCM account that owns the credentials presented to the proxy.
  *
  * GitHub and GitLab accept any username alongside a token, so the account is
@@ -98,22 +135,16 @@ export const getAuthenticatedGitAccount = async (
       return data?.login || null;
     }
 
+    if (isBasicAuthHost(upstream)) {
+      return await verifyBasicAuthCredentials(upstream, authHeader!, credentials.username, step);
+    }
+
     if (hostname.includes('gitlab')) {
       const { data } = await axios.get<{ username?: string }>(
         `${upstream.protocol}//${upstream.host}/api/v4/user`,
         { headers, timeout: IDENTITY_LOOKUP_TIMEOUT_MS },
       );
       return data?.username || null;
-    }
-
-    if (isBasicAuthHost(upstream)) {
-      await axios.get(`${upstream.origin}${upstream.pathname}/info/refs`, {
-        params: { service: 'git-receive-pack' },
-        headers: { Authorization: authHeader!, 'User-Agent': 'git-proxy' },
-        timeout: IDENTITY_LOOKUP_TIMEOUT_MS,
-        validateStatus: (status) => status === 200,
-      });
-      return credentials.username || null;
     }
   } catch (error: unknown) {
     step.log(`Unable to resolve the account for the push credentials: ${getErrorMessage(error)}`);

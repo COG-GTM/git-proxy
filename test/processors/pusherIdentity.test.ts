@@ -137,9 +137,15 @@ describe('pusherIdentity', () => {
       expect(axiosGetMock).not.toHaveBeenCalled();
     });
 
+    const mockGitServer = (anonymousStatus: number, authenticatedStatus: number) =>
+      axiosGetMock.mockImplementation(async (_url: string, options: any) => ({
+        status: options?.headers?.Authorization ? authenticatedStatus : anonymousStatus,
+        data: '',
+      }));
+
     it('trusts the Basic username for basicAuthHosts once the server accepts the credentials', async () => {
       vi.mocked(getBasicAuthHosts).mockReturnValue(['git-server']);
-      axiosGetMock.mockResolvedValue({ status: 200, data: '' });
+      mockGitServer(401, 200);
       const authHeader = basicAuth('testuser:user123');
 
       const account = await getAuthenticatedGitAccount(
@@ -149,6 +155,14 @@ describe('pusherIdentity', () => {
       );
 
       expect(account).toBe('testuser');
+      expect(axiosGetMock).toHaveBeenCalledTimes(2);
+      expect(axiosGetMock).toHaveBeenCalledWith(
+        'https://git-server:8443/test-owner/test-repo.git/info/refs',
+        expect.objectContaining({
+          params: { service: 'git-receive-pack' },
+          headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+        }),
+      );
       expect(axiosGetMock).toHaveBeenCalledWith(
         'https://git-server:8443/test-owner/test-repo.git/info/refs',
         expect.objectContaining({
@@ -160,7 +174,7 @@ describe('pusherIdentity', () => {
 
     it('matches basicAuthHosts entries that include a port', async () => {
       vi.mocked(getBasicAuthHosts).mockReturnValue(['git-server:8443']);
-      axiosGetMock.mockResolvedValue({ status: 200, data: '' });
+      mockGitServer(401, 200);
 
       const account = await getAuthenticatedGitAccount(
         'https://git-server:8443/test-owner/test-repo.git',
@@ -171,13 +185,57 @@ describe('pusherIdentity', () => {
       expect(account).toBe('testuser');
     });
 
+    it('prefers basicAuthHosts over the GitLab API for configured hosts', async () => {
+      vi.mocked(getBasicAuthHosts).mockReturnValue(['gitlab-mirror.example.com']);
+      mockGitServer(401, 200);
+
+      const account = await getAuthenticatedGitAccount(
+        'https://gitlab-mirror.example.com/team/repo.git',
+        basicAuth('testuser:user123'),
+        step,
+      );
+
+      expect(account).toBe('testuser');
+      expect(axiosGetMock).not.toHaveBeenCalledWith(
+        expect.stringContaining('/api/v4/user'),
+        expect.anything(),
+      );
+    });
+
     it('returns null when a basicAuthHosts server rejects the credentials', async () => {
       vi.mocked(getBasicAuthHosts).mockReturnValue(['git-server']);
-      axiosGetMock.mockRejectedValue(new Error('Request failed with status code 401'));
+      mockGitServer(401, 401);
 
       const account = await getAuthenticatedGitAccount(
         'https://git-server:8443/test-owner/test-repo.git',
         basicAuth('testuser:wrong-password'),
+        step,
+      );
+
+      expect(account).toBeNull();
+    });
+
+    it('returns null when a basicAuthHosts server allows anonymous pushes', async () => {
+      vi.mocked(getBasicAuthHosts).mockReturnValue(['git-server']);
+      mockGitServer(200, 200);
+
+      const account = await getAuthenticatedGitAccount(
+        'https://git-server:8443/test-owner/test-repo.git',
+        basicAuth('victim:wrong-password'),
+        step,
+      );
+
+      expect(account).toBeNull();
+      expect(axiosGetMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns null when a basicAuthHosts server is unreachable', async () => {
+      vi.mocked(getBasicAuthHosts).mockReturnValue(['git-server']);
+      axiosGetMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const account = await getAuthenticatedGitAccount(
+        'https://git-server:8443/test-owner/test-repo.git',
+        basicAuth('testuser:user123'),
         step,
       );
 

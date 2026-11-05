@@ -347,7 +347,7 @@ Optionally, a `statusCode` and a `message` can be specified to override the defa
 
 #### `basicAuthHosts`
 
-Hostnames (optionally with port) of self-hosted git servers that verify the Basic auth username and password themselves, such as servers backed by htpasswd or LDAP. For pushes to these hosts, GitProxy confirms the credentials are accepted by the server and then identifies the pusher by the Basic auth username, which must match a GitProxy user's `gitAccount`. Pushes to hosts that are neither GitHub, GitLab nor listed here are blocked. Never list a server that accepts any username alongside a token.
+Hostnames (optionally with port) of self-hosted git servers that verify the Basic auth username and password themselves, such as servers backed by htpasswd or LDAP. For pushes to these hosts, GitProxy checks that the server rejects anonymous `git-receive-pack` discovery and accepts it with the push credentials, and then identifies the pusher by the Basic auth username, which must match a GitProxy user's `gitAccount`. This setting takes precedence over the GitHub/GitLab API lookup for the listed hosts. Pushes to hosts that are neither GitHub, GitLab nor listed here are blocked. Never list a server that accepts any username alongside a token.
 
 ```json
 "basicAuthHosts": ["git.internal.example.com"]
