@@ -16,6 +16,26 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+const MAX_CONSOLE_MESSAGE_LENGTH = 200;
+
+/**
+ * Reduce a step message to a single short line for the process log.
+ * Full messages (which may quote diffs or detected secrets) stay in the step record only.
+ * @param {string} message The full step message
+ * @return {string} The first non-empty line, truncated to MAX_CONSOLE_MESSAGE_LENGTH
+ */
+const summarizeForConsole = (message: string): string => {
+  const firstLine = message.split('\n').find((line) => line.trim() !== '') ?? '';
+  const trimmed = firstLine.trim();
+  const summary =
+    trimmed.length > MAX_CONSOLE_MESSAGE_LENGTH
+      ? trimmed.slice(0, MAX_CONSOLE_MESSAGE_LENGTH)
+      : trimmed;
+  return summary.length < message.trim().length
+    ? `${summary} [truncated, ${message.length} chars]`
+    : summary;
+};
+
 export interface StepData {
   id: string;
   stepName: string;
@@ -71,9 +91,9 @@ class Step implements StepData {
   }
 
   log(message: string): void {
-    const m = `${this.stepName} - ${message}`;
-    this.logs.push(m);
-    console.info(m);
+    const text = String(message);
+    this.logs.push(`${this.stepName} - ${text}`);
+    console.info(`${this.stepName} - ${summarizeForConsole(text)}`);
   }
 }
 
