@@ -80,13 +80,22 @@ Source: [/src/proxy/processors/push-action/checkAuthorEmails.ts](/src/proxy/proc
 
 #### `checkUserPushPermission`
 
-Checks if the push has a valid user email associated to it (the email of the user making the push, **not the individual commit authors**), and if that user is allowed to push to that specific repo.
+Authenticates the pusher from the credentials presented to the proxy (the HTTP Basic `Authorization` header sent by the git client) and checks that the matching GitProxy user is allowed to push to that specific repo. Commit metadata in the pack (e.g. the committer email) is **never** used to identify the pusher, since it is fully controlled by the client.
+
+The pusher's SCM account is resolved as follows:
+
+- `github.com`: the token owner's `login` from `GET https://api.github.com/user`
+- GitLab hosts (hostname contains `gitlab`): the token owner's `username` from `GET <host>/api/v4/user`
+- Any other git server: the Basic auth username, which the server authenticates together with the password
+
+The SCM account is then matched (case-insensitively) against the `gitAccount` of GitProxy users. On success, `action.user` and `action.userEmail` are set to that GitProxy user's username and email; these are what the dashboard uses to prevent a reviewer from approving or rejecting their own push.
 
 This step will fail on various scenarios such as:
 
-- Push has no email associated to it (potentially a push parsing error)
-- The email associated to the push matches multiple GitProxy users
-- The user with the given email isn't in the repo's contributor list (`canPush`)
+- The push has no valid Basic credentials, or the SCM provider cannot resolve the token owner
+- The SCM account matches multiple GitProxy users
+- No GitProxy user has that SCM account as their `gitAccount`
+- The user isn't in the repo's contributor (`canPush`) or approver (`canAuthorise`) list
 
 Note: The _pusher_ can potentially be a different user from the _commit author(s)_. In order to filter the commit authors, you must use the `commitConfig.author` config entry. See [`checkAuthorEmails`](#checkauthoremails) for more details.
 

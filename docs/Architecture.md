@@ -53,7 +53,7 @@ Don't forget to save and update the attached .drawio (XML)! -->
 Three types of policies can be applied to incoming pushes:
 
 - Default policies: These are already present in the GitProxy pull/push chain and require modifying source code to change their behaviour.
-  - For example, [`checkUserPushPermission`](./Processors.md#checkuserpushpermission) which simply checks if the pusher's email exists in the GitProxy database, and if their user is marked in the "Contributors" list (`canPush`) for the repository they're trying to push to.
+  - For example, [`checkUserPushPermission`](./Processors.md#checkuserpushpermission) which authenticates the pusher from their git credentials, checks that they map to a GitProxy user (via `gitAccount`), and if their user is marked in the "Contributors" list (`canPush`) for the repository they're trying to push to.
 - Configurable policies: These are policies that can be easily configured through the GitProxy config (`proxy.config.json` or a custom file).
   - For example, [`checkCommitMessages`](./Processors.md#checkcommitmessages) which reads the configuration and matches the string patterns provided with the commit messages in the push in order to block it.
 - Custom policies:

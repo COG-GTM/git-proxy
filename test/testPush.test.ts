@@ -230,7 +230,7 @@ describe('Push API', () => {
         });
       expect(res.status).toBe(404);
       expect(res.body.message).toBe(
-        "No user found with the committer's email address: push-test-3@test.com",
+        "No user found with the pusher's email address: push-test-3@test.com",
       );
     });
   });
@@ -368,7 +368,7 @@ describe('Push API', () => {
       .send({ reason: 'Testing rejection' });
     expect(res.status).toBe(404);
     expect(res.body.message).toBe(
-      "No user found with the committer's email address: non-existent-email@test.com",
+      "No user found with the pusher's email address: non-existent-email@test.com",
     );
   });
 

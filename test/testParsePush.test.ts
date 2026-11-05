@@ -512,7 +512,8 @@ describe('parsePackFile', () => {
       expect(action.setCommit).toHaveBeenCalledWith(oldCommit, newCommit);
       expect(action.commitFrom).toBe(oldCommit);
       expect(action.commitTo).toBe(newCommit);
-      expect(action.user).toBe('Test Committer');
+      expect(action.user).toBeNull();
+      expect(action.userEmail).toBeUndefined();
 
       // Check parsed commit data
       expect(action.commitData).toHaveLength(1);
@@ -565,7 +566,7 @@ describe('parsePackFile', () => {
       expect(action.setCommit).toHaveBeenCalledWith(oldCommit, newCommit);
       expect(action.commitFrom).toBe(oldCommit);
       expect(action.commitTo).toBe(newCommit);
-      expect(action.user).toBe(author);
+      expect(action.user).toBeNull();
 
       // Check parsed commit data
       expect(action.commitData).toHaveLength(1);
@@ -608,7 +609,7 @@ describe('parsePackFile', () => {
       expect(action.setCommit).toHaveBeenCalledWith(oldCommit, newCommit);
       expect(action.commitFrom).toBe(oldCommit);
       expect(action.commitTo).toBe(newCommit);
-      expect(action.user).toBe('CCCCCCCCCCC');
+      expect(action.user).toBeNull();
 
       // Check parsed commit messages only
       const expectedCommits = TEST_MULTI_OBJ_COMMIT_CONTENT.filter((v) => v.type === 1);
@@ -664,7 +665,8 @@ describe('parsePackFile', () => {
       // commitFrom should still be the zero hash
       expect(action.commitFrom).toBe(oldCommit);
       expect(action.commitTo).toBe(newCommit);
-      expect(action.user).toBe('Test Committer');
+      expect(action.user).toBeNull();
+      expect(action.userEmail).toBeUndefined();
 
       // Check parsed commit data reflects no parent (zero hash)
       expect(action.commitData[0].parent).toBe(oldCommit);
@@ -883,7 +885,8 @@ describe('parsePackFile', () => {
       expect(action.commitData).toHaveLength(1);
       expect(action.commitData[0].message).toBe('Test commit message with PACK inside');
       expect(action.commitData[0].committer).toBe('Test Committer');
-      expect(action.user).toBe('Test Committer');
+      expect(action.user).toBeNull();
+      expect(action.userEmail).toBeUndefined();
     });
 
     it('should handle PACK data starting immediately after flush packet', async () => {
