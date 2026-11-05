@@ -35,7 +35,7 @@ describe('pullRemote checkout folder', () => {
     }
   });
 
-  it.each(['a__b/../escaped', '../escaped', 'a__b/nested', '..', ''])(
+  it.each(['a__b/../escaped', '../escaped', 'a__b/nested', '..', '.', '/etc', ''])(
     'rejects action id %j that does not map to a single folder inside .remote',
     async (id) => {
       const action = new Action(id, 'push', 'POST', Date.now(), 'finos/git-proxy.git');

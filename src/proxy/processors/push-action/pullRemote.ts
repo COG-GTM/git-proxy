@@ -30,7 +30,7 @@ const exec = async (req: Request, action: Action): Promise<Action> => {
   action.proxyGitPath = `${dir}/${action.id}`;
 
   const relativePath = path.relative(path.resolve(dir), path.resolve(action.proxyGitPath));
-  if (!relativePath || relativePath === '..' || relativePath.includes(path.sep)) {
+  if (!action.id || relativePath !== action.id || relativePath === '..') {
     const errMsg = 'Invalid checkout folder for this push.';
     action.proxyGitPath = undefined;
     step.setError(errMsg);
