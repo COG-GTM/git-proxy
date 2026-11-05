@@ -15,6 +15,7 @@
  */
 
 import express, { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
 import { getPassport, authStrategies } from '../passport';
 import { getAuthMethods } from '../../config';
 
@@ -47,6 +48,10 @@ router.get('/', (_req: Request, res: Response) => {
     logout: {
       action: 'post',
       uri: '/api/auth/logout',
+    },
+    changePassword: {
+      action: 'post',
+      uri: '/api/auth/change-password',
     },
   });
 });
@@ -232,6 +237,68 @@ router.post('/gitAccount', async (req: Request, res: Response) => {
         message: msg,
       })
       .end();
+  }
+});
+
+const MIN_PASSWORD_LENGTH = 8;
+
+router.post('/change-password', async (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).send({ message: 'Not logged in' }).end();
+    return;
+  }
+
+  try {
+    const { currentPassword, newPassword } = req.body ?? {};
+
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+      res
+        .status(400)
+        .send({ message: 'Missing required fields: currentPassword and newPassword are required' })
+        .end();
+      return;
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      res
+        .status(400)
+        .send({ message: `New password must be at least ${MIN_PASSWORD_LENGTH} characters long` })
+        .end();
+      return;
+    }
+
+    const user = await db.findUser((req.user as User).username);
+    if (!user) {
+      res.status(404).send({ message: 'User not found' }).end();
+      return;
+    }
+
+    if (!user.password) {
+      res
+        .status(400)
+        .send({ message: 'Password cannot be changed for users without a local password' })
+        .end();
+      return;
+    }
+
+    if (!(await bcrypt.compare(currentPassword, user.password))) {
+      res.status(403).send({ message: 'Current password is incorrect' }).end();
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      res
+        .status(400)
+        .send({ message: 'New password must be different from the current password' })
+        .end();
+      return;
+    }
+
+    await db.updateUser({ username: user.username, password: await bcrypt.hash(newPassword, 10) });
+    res.status(200).send({ message: 'Password changed successfully' }).end();
+  } catch (error: unknown) {
+    const msg = handleErrorAndLog(error, 'Failed to change password');
+    res.status(500).send({ message: msg }).end();
   }
 });
 

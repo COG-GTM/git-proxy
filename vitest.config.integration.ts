@@ -31,6 +31,7 @@ export default defineConfig({
     },
     env: {
       NODE_ENV: 'test',
+      GIT_PROXY_ADMIN_PASSWORD: 'admin',
       RUN_MONGO_TESTS: 'true',
       CONFIG_FILE: path.resolve(__dirname, 'test-integration.proxy.config.json'),
       GIT_PROXY_MONGO_CONNECTION_STRING: 'mongodb://localhost:27017/git-proxy-test',

@@ -18,6 +18,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    env: {
+      GIT_PROXY_ADMIN_PASSWORD: 'admin',
+    },
     pool: 'forks',
     poolOptions: {
       forks: {

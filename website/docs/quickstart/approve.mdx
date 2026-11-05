@@ -32,11 +32,11 @@ The `ID` for your push corresponds to the last part of the URL:
 
 #### 2. Authenticate with the API
 
-Use the default & auto-generated GitProxy username & password credentials to obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`):
+Use the `admin` account and the initial password printed in the GitProxy server log on first start (or the value of `GIT_PROXY_ADMIN_PASSWORD`, if set) to obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`):
 
 ```bash
 curl -H "Content-Type: application/json" -c git-proxy-cookie -X POST \
-  -d '{"username":"admin","password":"admin"}' http://localhost:8080/auth/login
+  -d '{"username":"admin","password":"<admin-password>"}' http://localhost:8080/auth/login
 ```
 
 #### 3. Retrieve push with `ID` from database
@@ -99,10 +99,10 @@ The `ID` for your push corresponds to the last part of the URL:
 
 #### 2. Authenticate with the CLI
 
-Use the default & auto-generated GitProxy username & password credentials to authenticate and obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`):
+Use the `admin` account and the initial password printed in the GitProxy server log on first start (or the value of `GIT_PROXY_ADMIN_PASSWORD`, if set) to authenticate and obtain a cookie. The cookie value is saved to a file (`git-proxy-cookie`):
 
 ```bash
-$ npx -- @finos/git-proxy-cli login --username admin --password admin
+$ npx -- @finos/git-proxy-cli login --username admin --password <admin-password>
 Login "admin" <admin@place.com> (admin): OK
 ```
 
