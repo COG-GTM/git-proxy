@@ -25,6 +25,7 @@ export default ({ mode }: { mode: string }) => {
     },
     server: {
       port: 3000,
+      strictPort: true,
       watch: {
         ignored: ['**/.data/**', '**/.remote/**', '**/.tmp/**'],
       },

@@ -59,14 +59,14 @@ const getServiceTLSOptions = () => ({
  *
  * Configuration Options:
  * 1. Production (restrictive): ALLOWED_ORIGINS='https://gitproxy.company.com,https://gitproxy-staging.company.com'
- * 2. Development (permissive): ALLOWED_ORIGINS='*'
+ * 2. Development (permissive): ALLOWED_ORIGINS='*' (wildcard origin, credentials disabled)
  * 3. Local dev with Vite: ALLOWED_ORIGINS='http://localhost:3000'
  * 4. Same-origin only: Leave ALLOWED_ORIGINS unset or empty
  *
  * Examples:
  * - Single origin: ALLOWED_ORIGINS='https://example.com'
  * - Multiple origins: ALLOWED_ORIGINS='http://localhost:3000,https://example.com'
- * - All origins (testing): ALLOWED_ORIGINS='*'
+ * - All origins (testing, no cookies/credentials): ALLOWED_ORIGINS='*'
  * - Same-origin only: ALLOWED_ORIGINS='' or unset
  */
 
@@ -95,43 +95,49 @@ function getAllowedOrigins(): string[] | '*' | undefined {
     .filter(Boolean);
 }
 
+const CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'];
+const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-TOKEN'];
+const CORS_EXPOSED_HEADERS = ['Set-Cookie'];
+
 /**
- * CORS origin callback - determines if origin is allowed
+ * CORS options delegate - decides `origin` and `credentials` together per-request.
+ *
+ * Credentialed CORS is never combined with a wildcard/arbitrary reflected origin
+ * (CWE-942). In permissive ('*') mode we return a literal wildcard origin with
+ * credentials disabled; in allow-list mode we only echo exact-match origins with
+ * credentials enabled.
  */
-function corsOriginCallback(
-  origin: string | undefined,
-  callback: (err: Error | null, allow?: boolean) => void,
-) {
+export const corsOptionsDelegate = (
+  req: express.Request,
+  callback: (err: Error | null, options?: cors.CorsOptions) => void,
+) => {
   const allowedOrigins = getAllowedOrigins();
+  const requestOrigin = req.header('Origin');
 
-  // Allow all origins
+  const base: cors.CorsOptions = {
+    methods: CORS_METHODS,
+    allowedHeaders: CORS_ALLOWED_HEADERS,
+    exposedHeaders: CORS_EXPOSED_HEADERS,
+    maxAge: 86400, // 24 hours
+  };
+
+  // Permissive/dev mode: wildcard origin WITHOUT credentials (never reflect + credentials)
   if (allowedOrigins === '*') {
-    return callback(null, true);
+    return callback(null, { ...base, origin: '*', credentials: false });
   }
 
-  // No ALLOWED_ORIGINS set - only allow same-origin (no origin header)
+  // Same-origin only
   if (!allowedOrigins) {
-    if (!origin) {
-      return callback(null, true); // Same-origin requests don't have origin header
-    }
-    return callback(null, false);
+    return callback(null, { ...base, origin: false, credentials: true });
   }
 
-  // Check if origin is in the allowed list
-  if (!origin || allowedOrigins.includes(origin)) {
-    return callback(null, true);
+  // Allow-list: only echo exact matches, with credentials. No Origin header => allow (same-origin/curl)
+  if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
+    return callback(null, { ...base, origin: requestOrigin ?? false, credentials: true });
   }
 
-  callback(new Error('Not allowed by CORS'));
-}
-
-const corsOptions: cors.CorsOptions = {
-  origin: corsOriginCallback,
-  credentials: true, // Allow credentials (cookies, authorization headers)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-TOKEN'],
-  exposedHeaders: ['Set-Cookie'],
-  maxAge: 86400, // 24 hours
+  // Reject unlisted origins outright so the request never reaches route handlers
+  return callback(new Error('Not allowed by CORS'));
 };
 
 /**
@@ -144,7 +150,7 @@ async function createApp(proxy: Proxy): Promise<Express> {
   // Before we can bind the routes - we need the passport strategy
   const passport = await configure();
   const absBuildPath = path.join(__dirname, '../../build');
-  app.use(cors(corsOptions));
+  app.use(cors(corsOptionsDelegate));
   app.set('trust proxy', 1);
   app.use(limiter);
 
