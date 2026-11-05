@@ -56,16 +56,16 @@ export interface GitProxyConfig {
    */
   domains?: Domains;
   /**
-   * List of plugins to integrate on GitProxy's push or pull actions. Each value is either a
-   * file path or a module name.
-   */
-  plugins?: string[];
-  /**
    * Maximum size in bytes of a git-upload-pack or git-receive-pack request body that the
    * proxy will buffer for inspection. Larger requests are rejected with HTTP 413 (default
    * 104857600, i.e. 100 MiB).
    */
   maxPackSizeBytes?: number;
+  /**
+   * List of plugins to integrate on GitProxy's push or pull actions. Each value is either a
+   * file path or a module name.
+   */
+  plugins?: string[];
   /**
    * Provider searches for listed private organizations are disabled, see
    * commitConfig.diff.block.providers
