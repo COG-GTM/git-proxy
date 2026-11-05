@@ -18,7 +18,7 @@ import { Request } from 'express';
 import fs from 'fs';
 import lod from 'lodash';
 import { promisify } from 'util';
-import { inflate, type InflateOptions, type Zlib } from 'zlib';
+import { inflate, type ZlibOptions, type Zlib } from 'zlib';
 
 import { Action, Step } from '../../actions';
 import { CommitContent, CommitData, CommitHeader, PackMeta, PersonLine } from '../types';
@@ -468,7 +468,7 @@ const parseGitObjectHeader = (buffer: Buffer, offset: number): GitObjectHeader =
 // async zlib runs on the libuv threadpool so large objects don't block the event loop
 const inflateAsync = promisify(inflate) as unknown as (
   buf: Buffer,
-  options: InflateOptions & { info: true },
+  options: ZlibOptions & { info: true },
 ) => Promise<{ buffer: Buffer; engine: Zlib }>;
 
 // limits how many pushes inflate at once so concurrent requests can't multiply MAX_INFLATED_PACK_SIZE
