@@ -70,13 +70,12 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
     passport.use(type, strategy);
 
     passport.serializeUser((user: Partial<db.User>, done) => {
-      done(null, user.oidcId || user.username);
+      done(null, serializeSessionId(user));
     });
 
     passport.deserializeUser(async (id: string, done) => {
       try {
-        const user = (await db.findUserByOIDC(id)) ?? (await db.findUser(id));
-        done(null, user);
+        done(null, await deserializeSessionId(id));
       } catch (error: unknown) {
         done(error);
       }
@@ -113,7 +112,7 @@ export const handleUserAuthentication = async (
 
     const existingWithEmail = await db.findUserByEmail(email);
     if (existingWithEmail) {
-      if (isUnboundOIDCUser(existingWithEmail)) {
+      if (isUnboundOIDCUser(existingWithEmail) && userInfo.email_verified === true) {
         // Accounts created before the OIDC subject was persisted: bind on exact email match.
         existingWithEmail.oidcId = userInfo.sub;
         await db.updateUser(existingWithEmail);
@@ -131,6 +130,25 @@ export const handleUserAuthentication = async (
     const msg = handleErrorAndLog(error, 'Error during OIDC user authentication');
     return done(msg);
   }
+};
+
+const OIDC_SESSION_PREFIX = 'oidc:';
+const USERNAME_SESSION_PREFIX = 'user:';
+
+// Session ids are namespaced so a username can never be resolved as another user's OIDC subject.
+export const serializeSessionId = (user: Partial<db.User>): string =>
+  user.oidcId
+    ? `${OIDC_SESSION_PREFIX}${user.oidcId}`
+    : `${USERNAME_SESSION_PREFIX}${user.username}`;
+
+export const deserializeSessionId = async (id: string): Promise<db.User | null> => {
+  if (id.startsWith(OIDC_SESSION_PREFIX)) {
+    return db.findUserByOIDC(id.slice(OIDC_SESSION_PREFIX.length));
+  }
+  if (id.startsWith(USERNAME_SESSION_PREFIX)) {
+    return db.findUser(id.slice(USERNAME_SESSION_PREFIX.length));
+  }
+  return db.findUserByOIDC(id);
 };
 
 // createUser stores an explicit null password only for OIDC accounts; AD upserts omit the field.
