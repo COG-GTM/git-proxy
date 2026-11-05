@@ -136,8 +136,8 @@ export const corsOptionsDelegate = (
     return callback(null, { ...base, origin: requestOrigin ?? false, credentials: true });
   }
 
-  // Not allowed
-  return callback(null, { ...base, origin: false, credentials: true });
+  // Reject unlisted origins outright so the request never reaches route handlers
+  return callback(new Error('Not allowed by CORS'));
 };
 
 /**

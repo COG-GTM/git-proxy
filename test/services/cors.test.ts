@@ -83,9 +83,11 @@ describe('CORS delegate (CWE-942 protection)', () => {
       expect(res.headers['access-control-allow-credentials']).toBe('true');
     });
 
-    it('does not set CORS headers for a non-listed origin', async () => {
+    it('rejects a non-listed origin before reaching the route', async () => {
       const res = await request(buildApp()).get('/test').set('Origin', 'https://evil.example.com');
 
+      expect(res.status).toBe(500);
+      expect(res.body).not.toEqual({ message: 'ok' });
       expect(res.headers['access-control-allow-origin']).toBeUndefined();
     });
 
