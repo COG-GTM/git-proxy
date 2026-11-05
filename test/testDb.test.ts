@@ -444,6 +444,25 @@ describe('Database clients', () => {
     expect(cleanUsers).not.toContainEqual(TEST_USER);
   });
 
+  it('should persist oidcId so the user can be found by OIDC subject', async () => {
+    await db.deleteUser(TEST_USER.username);
+
+    await db.createUser(
+      TEST_USER.username,
+      '',
+      TEST_USER.email,
+      TEST_USER.gitAccount,
+      false,
+      'oidc-subject-123',
+    );
+
+    const user = await db.findUserByOIDC('oidc-subject-123');
+    expect(user?.username).toBe(TEST_USER.username.toLowerCase());
+    expect(user?.password).toBeNull();
+
+    await db.deleteUser(TEST_USER.username);
+  });
+
   it('should be able to update a user', async () => {
     // Ensure user doesn't exist first
     await db.deleteUser(TEST_USER.username);
