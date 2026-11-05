@@ -121,18 +121,22 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
     ),
   );
 
-  passport.serializeUser(function (
-    user: Partial<db.User>,
-    done: (err: unknown, user: Partial<db.User>) => void,
-  ) {
-    done(null, user);
+  passport.serializeUser((user: Partial<db.User>, done) => {
+    done(null, user.username);
   });
 
-  passport.deserializeUser(function (
-    user: Partial<db.User>,
-    done: (err: unknown, user: Partial<db.User>) => void,
-  ) {
-    done(null, user);
+  passport.deserializeUser(async (session: string | Partial<db.User>, done) => {
+    try {
+      // Sessions created before AD stored only the username hold the full user object
+      const username = typeof session === 'string' ? session : session?.username;
+      if (!username) {
+        return done(null, false);
+      }
+      const user = await db.findUser(username);
+      done(null, user ?? false);
+    } catch (error: unknown) {
+      done(error, null);
+    }
   });
 
   return passport;
