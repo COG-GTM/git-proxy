@@ -143,10 +143,12 @@ describe('url helpers and filter functions used in the proxy', () => {
       '/git-upload-pack',
       '/git-receive-pack',
     ].forEach((url) => {
+      const service = url.includes('receive-pack') ? 'git-receive-pack' : 'git-upload-pack';
       expect(
         validGitRequest(url, {
           'user-agent': 'git/2.30.0',
-          accept: 'application/x-git-upload-pack-request',
+          accept: `application/x-${service}-result`,
+          'content-type': `application/x-${service}-request`,
         }),
       ).toBe(true);
     });
@@ -188,12 +190,35 @@ describe('url helpers and filter functions used in the proxy', () => {
     ).toBe(false);
   });
 
-  it('validGitRequest should return false for unexpected content-type', () => {
+  it('validGitRequest should return false for unexpected accept', () => {
     ['application/json', 'text/html', '*/*'].forEach((accept) => {
       expect(
         validGitRequest('/git-upload-pack', {
           'user-agent': 'git/2.30.0',
           accept,
+          'content-type': 'application/x-git-upload-pack-request',
+        }),
+      ).toBe(false);
+    });
+  });
+
+  it('validGitRequest should return false when the content-type does not match the pack service', () => {
+    const cases: [string, string | undefined][] = [
+      ['/git-receive-pack', undefined],
+      ['/git-receive-pack', 'application/x-git-receive-pack-request;charset=utf-8'],
+      ['/git-receive-pack', 'Application/X-Git-Receive-Pack-Request'],
+      ['/git-receive-pack', 'application/x-git-upload-pack-request'],
+      ['/git-receive-pack', 'application/octet-stream'],
+      ['/git-upload-pack', undefined],
+      ['/git-upload-pack', 'application/x-git-upload-pack-request; charset=utf-8'],
+      ['/git-upload-pack', 'application/x-git-receive-pack-request'],
+    ];
+    cases.forEach(([gitPath, contentType]) => {
+      expect(
+        validGitRequest(gitPath, {
+          'user-agent': 'git/2.30.0',
+          accept: 'application/x-git-receive-pack-result',
+          'content-type': contentType,
         }),
       ).toBe(false);
     });

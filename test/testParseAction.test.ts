@@ -98,4 +98,44 @@ describe('Pre-processor: parseAction', () => {
     expect(action.type).toBe('push');
     expect(action.url).toBe('https://github.com/finos/git-proxy.git');
   });
+
+  it.each([
+    'application/x-git-receive-pack-request;charset=utf-8',
+    'application/x-git-upload-pack-request',
+    undefined,
+  ])(
+    'should classify git-receive-pack as a push regardless of content-type %s',
+    async (contentType) => {
+      const req = {
+        originalUrl: '/github.com/finos/git-proxy.git/git-receive-pack',
+        method: 'POST',
+        headers: { 'content-type': contentType },
+      } as unknown as Request;
+
+      const action = await preprocessor.exec(req);
+      expect(action.type).toBe('push');
+    },
+  );
+
+  it('should classify git-upload-pack as a pull regardless of content-type', async () => {
+    const req = {
+      originalUrl: '/github.com/finos/git-proxy.git/git-upload-pack',
+      method: 'POST',
+      headers: { 'content-type': 'application/x-git-receive-pack-request' },
+    } as unknown as Request;
+
+    const action = await preprocessor.exec(req);
+    expect(action.type).toBe('pull');
+  });
+
+  it('should classify ref discovery requests as default', async () => {
+    const req = {
+      originalUrl: '/github.com/finos/git-proxy.git/info/refs?service=git-receive-pack',
+      method: 'GET',
+      headers: {},
+    } as Request;
+
+    const action = await preprocessor.exec(req);
+    expect(action.type).toBe('default');
+  });
 });

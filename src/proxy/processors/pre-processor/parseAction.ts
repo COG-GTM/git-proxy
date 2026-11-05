@@ -25,19 +25,21 @@ const exec = async (req: Request) => {
   const timestamp = id;
   let type = 'default';
 
-  //inspect content-type headers to classify requests as push or pull operations
-  // see git http protocol docs for more details: https://github.com/git/git/blob/master/Documentation/gitprotocol-http.adoc
-  if (req.headers['content-type'] === 'application/x-git-upload-pack-request') {
-    type = 'pull';
-  } else if (req.headers['content-type'] === 'application/x-git-receive-pack-request') {
-    type = 'push';
-  }
-
   // Proxy URLs take the form https://<git proxy domain>:<port>/<proxied domain>/<repoPath>
   // e.g. https://git-proxy-instance.com:8443/github.com/finos/git-proxy.git
   // We'll receive /github.com/finos/git-proxy.git as the req.url / req.originalUrl
   // Add protocol (assume SSL) to reconstruct full URL - noting path will start with a /
   const pathBreakdown = processUrlPath(req.originalUrl);
+
+  // Classify push/pull from the service named in the URL path, as that is what the upstream
+  // executes; the Content-Type header is client-controlled and validated separately.
+  // see git http protocol docs for more details: https://github.com/git/git/blob/master/Documentation/gitprotocol-http.adoc
+  if (pathBreakdown?.gitPath === '/git-upload-pack') {
+    type = 'pull';
+  } else if (pathBreakdown?.gitPath === '/git-receive-pack') {
+    type = 'push';
+  }
+
   let url = 'https:/' + (pathBreakdown?.repoPath ?? 'NOT-FOUND');
 
   console.log(`Parse action calculated repo URL: ${url} for inbound URL path: ${req.originalUrl}`);
