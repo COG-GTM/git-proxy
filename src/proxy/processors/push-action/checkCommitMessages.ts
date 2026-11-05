@@ -78,7 +78,8 @@ const exec = async (_req: Request, action: Action): Promise<Action> => {
 
   if (illegalMessages.length > 0) {
     step.error = true;
-    step.log(`The following commit messages are illegal: ${illegalMessages}`);
+    step.log(`The following commit messages are illegal: ${illegalMessages}`, { console: false });
+    step.log(`${illegalMessages.length} commit message(s) blocked.`);
     step.setError(
       `\n\n\nYour push has been blocked.\nPlease ensure your commit message(s) does not contain sensitive information or URLs.\n\nThe following commit messages are illegal: ${JSON.stringify(illegalMessages)}\n\n`,
     );

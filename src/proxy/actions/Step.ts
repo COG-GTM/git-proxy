@@ -90,10 +90,12 @@ class Step implements StepData {
     this.blockedMessage = message;
   }
 
-  log(message: string): void {
+  log(message: string, { console: echo = true }: { console?: boolean } = {}): void {
     const text = String(message);
     this.logs.push(`${this.stepName} - ${text}`);
-    console.info(`${this.stepName} - ${summarizeForConsole(text)}`);
+    if (echo) {
+      console.info(`${this.stepName} - ${summarizeForConsole(text)}`);
+    }
   }
 }
 

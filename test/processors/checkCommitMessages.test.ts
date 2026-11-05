@@ -358,6 +358,23 @@ describe('checkCommitMessages', () => {
         );
       });
 
+      it('should not write blocked commit messages to the console log', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        try {
+          action.commitData = [{ ...SAMPLE_COMMIT, message: 'Add password' }];
+
+          const result = await exec(req, action);
+          const step = result.steps[0];
+
+          expect(step.errorMessage).toContain('Add password');
+          const consoleOutput = infoSpy.mock.calls.map((args) => args.join(' ')).join('\n');
+          expect(consoleOutput).toContain('checkCommitMessages - 1 commit message(s) blocked.');
+          expect(consoleOutput).not.toContain('Add password');
+        } finally {
+          infoSpy.mockRestore();
+        }
+      });
+
       it('should set detailed error message', async () => {
         action.commitData = [{ ...SAMPLE_COMMIT, message: 'Add secret' }];
 

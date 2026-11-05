@@ -58,6 +58,16 @@ describe('Step.log', () => {
     expect(output).toBe(`test - ${'a'.repeat(200)} [truncated, 500 chars]`);
   });
 
+  it('keeps messages logged with console: false out of the console', () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const step = new Step('test');
+
+    step.log('illegal: AKIAIOSFODNN7EXAMPLE', { console: false });
+
+    expect(step.logs).toEqual(['test - illegal: AKIAIOSFODNN7EXAMPLE']);
+    expect(infoSpy).not.toHaveBeenCalled();
+  });
+
   it('does not echo setError messages beyond their first line to the console', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const step = new Step('scanDiff');
