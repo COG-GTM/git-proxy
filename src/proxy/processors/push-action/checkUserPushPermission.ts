@@ -19,7 +19,7 @@ import { Request } from 'express';
 import { Action, Step } from '../../actions';
 import { getUsers, isUserPushAllowed } from '../../../db';
 import { User } from '../../../db/types';
-import { getAuthenticatedGitAccount } from '../pusherIdentity';
+import { getVerifiedGitAccount } from '../pusherIdentity';
 
 // Execute if the repo is approved
 const exec = async (req: Request, action: Action): Promise<Action> => {
@@ -27,7 +27,7 @@ const exec = async (req: Request, action: Action): Promise<Action> => {
 
   // The pusher is identified from the credentials presented to the proxy, never from
   // commit metadata in the pack, which the client fully controls.
-  const gitAccount = await getAuthenticatedGitAccount(action.url, req.headers?.authorization, step);
+  const gitAccount = await getVerifiedGitAccount(action, req.headers?.authorization, step);
 
   if (!gitAccount) {
     step.setError(

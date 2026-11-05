@@ -15,7 +15,7 @@
  */
 
 import axios from 'axios';
-import { Step } from '../actions';
+import { Action, Step } from '../actions';
 import { getErrorMessage } from '../../utils/errors';
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 10000;
@@ -102,4 +102,27 @@ export const getAuthenticatedGitAccount = async (
 
   step.log(`Unable to verify the owner of the push credentials for host ${hostname}`);
   return null;
+};
+
+const verifiedAccounts = new WeakMap<Action, string>();
+
+/**
+ * Resolves the authenticated SCM account for a push, verifying the credentials with the
+ * provider at most once per action so that every step in the chain agrees on the pusher.
+ * @param {Action} action The push action
+ * @param {string | undefined} authHeader The Authorization header sent by the git client
+ * @param {Step} step The step used for logging
+ * @return {Promise<string | null>} The authenticated SCM account, or null if it cannot be established
+ */
+export const getVerifiedGitAccount = async (
+  action: Action,
+  authHeader: string | undefined,
+  step: Step,
+): Promise<string | null> => {
+  const cached = verifiedAccounts.get(action);
+  if (cached) return cached;
+
+  const gitAccount = await getAuthenticatedGitAccount(action.url, authHeader, step);
+  if (gitAccount) verifiedAccounts.set(action, gitAccount);
+  return gitAccount;
 };

@@ -31,6 +31,8 @@ vi.mock('axios', () => ({
 import axios from 'axios';
 import { getUsers } from '../../src/db';
 import { exec } from '../../src/proxy/processors/push-action/resolvePusher';
+import { exec as checkUserPushPermission } from '../../src/proxy/processors/push-action/checkUserPushPermission';
+import { isUserPushAllowed } from '../../src/db';
 
 const GITHUB_URL = 'https://github.com/finos/git-proxy.git';
 
@@ -65,6 +67,18 @@ describe('resolvePusher', () => {
     expect(result.userEmail).toBe('alice@test.com');
     expect(result.steps[0].stepName).toBe('resolvePusher');
     expect(result.steps[0].error).toBe(false);
+  });
+
+  it('verifies the credentials once for both resolvePusher and checkUserPushPermission', async () => {
+    vi.mocked(isUserPushAllowed).mockResolvedValue(true);
+
+    await exec(req, action);
+    vi.mocked(axios.get).mockRejectedValue(new Error('provider unavailable'));
+    const result = await checkUserPushPermission(req, action);
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(isUserPushAllowed).toHaveBeenCalledWith(GITHUB_URL, 'alice');
+    expect(result.steps[1].error).toBe(false);
   });
 
   it('leaves the identity unset without blocking when no single user matches', async () => {

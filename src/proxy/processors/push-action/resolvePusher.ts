@@ -17,7 +17,7 @@
 import { Request } from 'express';
 
 import { Action, Step } from '../../actions';
-import { getAuthenticatedGitAccount } from '../pusherIdentity';
+import { getVerifiedGitAccount } from '../pusherIdentity';
 import { findUsersByGitAccount } from './checkUserPushPermission';
 
 // Records the authenticated pusher on the action so that push plugins, which run right
@@ -25,7 +25,7 @@ import { findUsersByGitAccount } from './checkUserPushPermission';
 const exec = async (req: Request, action: Action): Promise<Action> => {
   const step = new Step('resolvePusher');
 
-  const gitAccount = await getAuthenticatedGitAccount(action.url, req.headers?.authorization, step);
+  const gitAccount = await getVerifiedGitAccount(action, req.headers?.authorization, step);
   if (gitAccount) {
     const list = await findUsersByGitAccount(gitAccount);
     if (list.length === 1) {
