@@ -73,7 +73,7 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
       done(null, serializeSessionId(user));
     });
 
-    passport.deserializeUser(async (id: string, done) => {
+    passport.deserializeUser(async (id: SessionRef | string, done) => {
       try {
         done(null, await deserializeSessionId(id));
       } catch (error: unknown) {
@@ -132,23 +132,18 @@ export const handleUserAuthentication = async (
   }
 };
 
-const OIDC_SESSION_PREFIX = 'oidc:';
-const USERNAME_SESSION_PREFIX = 'user:';
+export type SessionRef = { oidcId: string } | { username: string };
 
-// Session ids are namespaced so a username can never be resolved as another user's OIDC subject.
-export const serializeSessionId = (user: Partial<db.User>): string =>
-  user.oidcId
-    ? `${OIDC_SESSION_PREFIX}${user.oidcId}`
-    : `${USERNAME_SESSION_PREFIX}${user.username}`;
+// Sessions store a typed reference so a username can never be resolved as an OIDC subject (or vice versa).
+export const serializeSessionId = (user: Partial<db.User>): SessionRef =>
+  user.oidcId ? { oidcId: user.oidcId } : { username: user.username ?? '' };
 
-export const deserializeSessionId = async (id: string): Promise<db.User | null> => {
-  if (id.startsWith(OIDC_SESSION_PREFIX)) {
-    return db.findUserByOIDC(id.slice(OIDC_SESSION_PREFIX.length));
-  }
-  if (id.startsWith(USERNAME_SESSION_PREFIX)) {
-    return db.findUser(id.slice(USERNAME_SESSION_PREFIX.length));
-  }
-  return db.findUserByOIDC(id);
+export const deserializeSessionId = async (id: SessionRef | string): Promise<db.User | null> => {
+  // Sessions created before typed references stored the raw OIDC subject.
+  if (typeof id === 'string') return db.findUserByOIDC(id);
+  if ('oidcId' in id && typeof id.oidcId === 'string') return db.findUserByOIDC(id.oidcId);
+  if ('username' in id && typeof id.username === 'string') return db.findUser(id.username);
+  return null;
 };
 
 // createUser stores an explicit null password only for OIDC accounts; AD upserts omit the field.

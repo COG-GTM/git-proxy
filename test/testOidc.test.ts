@@ -350,9 +350,32 @@ describe('OIDC user identity binding', () => {
 
     const localId = oidc.serializeSessionId(users[0]);
     const oidcId = oidc.serializeSessionId(users[1]);
-    expect(localId).not.toBe(oidcId);
+    expect(localId).not.toEqual(oidcId);
     expect((await oidc.deserializeSessionId(localId))?.username).toBe('sub-victim');
     expect((await oidc.deserializeSessionId(oidcId))?.username).toBe('victim');
+  });
+
+  it('resolves legacy string session ids only as OIDC subjects', async () => {
+    users.push(
+      {
+        username: 'admin',
+        email: 'a@acme.example',
+        password: 'hashed',
+        gitAccount: 'a',
+        admin: true,
+      },
+      {
+        username: 'oddsub',
+        email: 'o@acme.example',
+        password: null,
+        gitAccount: 'o',
+        admin: false,
+        oidcId: 'user:admin',
+      },
+    );
+
+    expect((await oidc.deserializeSessionId('user:admin'))?.username).toBe('oddsub');
+    expect(await oidc.deserializeSessionId('admin')).toBeNull();
   });
 
   it('rejects a new account when the provider marks the email unverified', async () => {
