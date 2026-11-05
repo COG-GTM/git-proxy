@@ -182,6 +182,7 @@ The following environment variables can be set at container runtime:
 | `ALLOWED_ORIGINS`         | (empty)      | CORS allowed origins (comma-separated, or `*` for all) |
 | `API_URL`                 | (empty)      | API URL for the UI (leave empty for same-origin)       |
 | `NODE_ENV`                | `production` | Node environment                                       |
+| `GIT_PROXY_ADMIN_PASSWORD` | (empty) | Initial password for the `admin` user, used only on first start when no `admin` exists. If unset, a random password is generated and printed once to the log |
 
 Example with environment variables:
 
