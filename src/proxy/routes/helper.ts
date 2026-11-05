@@ -169,7 +169,7 @@ export const processGitURLForNameAndOrg = (gitUrl: string): GitNameBreakdown | n
  * Otherwise, false.
  */
 export const validGitRequest = (gitPath: string, headers: IncomingHttpHeaders): boolean => {
-  const { 'user-agent': agent, accept } = headers;
+  const { 'user-agent': agent, accept, 'content-type': contentType } = headers;
   if (!agent) {
     return false;
   }
@@ -186,7 +186,14 @@ export const validGitRequest = (gitPath: string, headers: IncomingHttpHeaders): 
       return false;
     }
     // https://www.git-scm.com/docs/http-protocol#_uploading_data
-    return agent.startsWith('git/') && accept.startsWith('application/x-git-');
+    // The Content-Type must match the service in the path, otherwise a push could be
+    // misclassified and skip the push checks while still reaching the upstream receive-pack.
+    const expectedContentType = `application/x-${gitPath.substring(1)}-request`;
+    return (
+      agent.startsWith('git/') &&
+      accept.startsWith('application/x-git-') &&
+      contentType === expectedContentType
+    );
   }
   return false;
 };

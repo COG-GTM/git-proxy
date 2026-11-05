@@ -330,6 +330,25 @@ describe('proxyFilter', () => {
   });
 
   describe('Valid requests', () => {
+    it('should run the chain for a git-receive-pack POST with the standard content-type', async () => {
+      mockReq.method = 'POST';
+      mockReq.url = '/github.com/finos/git-proxy.git/git-receive-pack';
+      mockReq.headers = {
+        ...mockReq.headers,
+        accept: 'application/x-git-receive-pack-result',
+        'content-type': 'application/x-git-receive-pack-request',
+      };
+      const executeChainSpy = vi.spyOn(chain, 'executeChain').mockResolvedValue({
+        error: false,
+        blocked: false,
+      } as Action);
+
+      const result = await proxyFilter?.(mockReq as Request, mockRes as Response);
+
+      expect(result).toBe(true);
+      expect(executeChainSpy).toHaveBeenCalledOnce();
+    });
+
     it('should allow valid GET request to info/refs', async () => {
       // mock helpers to return valid data
       vi.spyOn(helper, 'processUrlPath').mockReturnValue({
@@ -418,6 +437,32 @@ describe('proxyFilter', () => {
       expect(result).toBe(false);
       expect(statusMock).toHaveBeenCalledWith(200);
     });
+
+    it.each([
+      'application/x-git-receive-pack-request;charset=utf-8',
+      'Application/X-Git-Receive-Pack-Request',
+      'application/x-git-upload-pack-request',
+      undefined,
+    ])(
+      'should reject a git-receive-pack POST with content-type %s before running the chain',
+      async (contentType) => {
+        mockReq.method = 'POST';
+        mockReq.url = '/github.com/finos/git-proxy.git/git-receive-pack';
+        mockReq.headers = {
+          ...mockReq.headers,
+          accept: 'application/x-git-receive-pack-result',
+          'content-type': contentType,
+        };
+        const executeChainSpy = vi.spyOn(chain, 'executeChain');
+
+        const result = await proxyFilter?.(mockReq as Request, mockRes as Response);
+
+        expect(result).toBe(false);
+        expect(executeChainSpy).not.toHaveBeenCalled();
+        expect(statusMock).toHaveBeenCalledWith(200);
+        expect(sendMock.mock.calls[0][0]).toContain('Invalid request received');
+      },
+    );
 
     it('should reject invalid git request', async () => {
       vi.spyOn(helper, 'processUrlPath').mockReturnValue({
@@ -661,12 +706,31 @@ describe('proxy route helpers', () => {
       expect(res).toBe(false);
     });
 
-    it('should return true for /git-upload-pack with valid user-agent and accept', () => {
+    it('should return true for /git-upload-pack with valid user-agent, accept and content-type', () => {
       const res = validGitRequest('/git-upload-pack', {
         'user-agent': 'git/2.40.0',
-        accept: 'application/x-git-upload-pack-request',
+        accept: 'application/x-git-upload-pack-result',
+        'content-type': 'application/x-git-upload-pack-request',
       });
       expect(res).toBe(true);
+    });
+
+    it('should return true for /git-receive-pack with valid user-agent, accept and content-type', () => {
+      const res = validGitRequest('/git-receive-pack', {
+        'user-agent': 'git/2.40.0',
+        accept: 'application/x-git-receive-pack-result',
+        'content-type': 'application/x-git-receive-pack-request',
+      });
+      expect(res).toBe(true);
+    });
+
+    it('should return false for /git-receive-pack with a non-matching content-type', () => {
+      const res = validGitRequest('/git-receive-pack', {
+        'user-agent': 'git/2.40.0',
+        accept: 'application/x-git-receive-pack-result',
+        'content-type': 'application/x-git-receive-pack-request;charset=utf-8',
+      });
+      expect(res).toBe(false);
     });
 
     it('should return false for /git-upload-pack with missing accept header', () => {
