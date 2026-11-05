@@ -19,6 +19,7 @@ import { PassportStatic } from 'passport';
 import { getAuthMethods } from '../../config';
 import { type UserInfoResponse } from 'openid-client';
 import { handleErrorAndLog } from '../../utils/errors';
+import { createHash } from 'crypto';
 
 export const type = 'openidconnect';
 
@@ -74,7 +75,7 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
 
     passport.deserializeUser(async (id: string, done) => {
       try {
-        const user = await db.findUserByOIDC(id);
+        const user = (await db.findUserByOIDC(id)) ?? (await db.findUser(id));
         done(null, user);
       } catch (error: unknown) {
         done(error);
@@ -99,27 +100,58 @@ export const handleUserAuthentication = async (
   done: (err: unknown, user?: Partial<db.User>) => void,
 ): Promise<void> => {
   try {
+    if (!userInfo.sub) return done(new Error('No subject found in OIDC profile'));
+
     const user = await db.findUserByOIDC(userInfo.sub);
+    if (user) return done(null, user);
 
-    if (!user) {
-      const email = safelyExtractEmail(userInfo);
-      if (!email) return done(new Error('No email found in OIDC profile'));
-
-      const newUser = {
-        username: getUsername(email),
-        email,
-        oidcId: userInfo.sub,
-      };
-
-      await db.createUser(newUser.username, '', newUser.email, 'Edit me', false, newUser.oidcId);
-      return done(null, newUser);
+    const email = safelyExtractEmail(userInfo);
+    if (!email) return done(new Error('No email found in OIDC profile'));
+    if (userInfo.email_verified === false) {
+      return done(new Error('OIDC email address is not verified'));
     }
 
-    return done(null, user);
+    const existingWithEmail = await db.findUserByEmail(email);
+    if (existingWithEmail) {
+      if (isUnboundOIDCUser(existingWithEmail)) {
+        // Accounts created before the OIDC subject was persisted: bind on exact email match.
+        existingWithEmail.oidcId = userInfo.sub;
+        await db.updateUser(existingWithEmail);
+        return done(null, existingWithEmail);
+      }
+      return done(new Error(`A user with email ${email} already exists`));
+    }
+
+    const username = await getAvailableUsername(email, userInfo.sub);
+    await db.createUser(username, '', email, 'Edit me', false, userInfo.sub);
+
+    const created = await db.findUserByOIDC(userInfo.sub);
+    return done(null, created ?? { username, email, oidcId: userInfo.sub });
   } catch (error: unknown) {
     const msg = handleErrorAndLog(error, 'Error during OIDC user authentication');
     return done(msg);
   }
+};
+
+// createUser stores an explicit null password only for OIDC accounts; AD upserts omit the field.
+const isUnboundOIDCUser = (user: db.User): boolean => !user.oidcId && user.password === null;
+
+/**
+ * Picks a username for a new OIDC user. Uses the email local part when free, otherwise
+ * appends a suffix derived from the OIDC subject so a different identity sharing the
+ * same local part never collides with (or squats) an existing account.
+ * @param {string} email - The email address from the OIDC profile
+ * @param {string} sub - The OIDC subject identifier
+ * @return {Promise<string>} - An unused username
+ */
+export const getAvailableUsername = async (email: string, sub: string): Promise<string> => {
+  const base = getUsername(email);
+  if (!(await db.findUser(base))) return base;
+
+  const suffixed = `${base}-${createHash('sha256').update(sub).digest('hex').slice(0, 8)}`;
+  if (!(await db.findUser(suffixed))) return suffixed;
+
+  throw new Error(`Unable to allocate a unique username for ${email}`);
 };
 
 /**
