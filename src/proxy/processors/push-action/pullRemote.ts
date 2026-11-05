@@ -29,8 +29,15 @@ const exec = async (req: Request, action: Action): Promise<Action> => {
   const step = new Step('pullRemote');
   action.proxyGitPath = `${dir}/${action.id}`;
 
+  // the checkout folder must be a single directory directly inside .remote
   const relativePath = path.relative(path.resolve(dir), path.resolve(action.proxyGitPath));
-  if (!action.id || relativePath !== action.id || relativePath === '..') {
+  if (
+    !action.id ||
+    action.id === '.' ||
+    action.id === '..' ||
+    path.basename(action.id) !== action.id ||
+    relativePath !== action.id
+  ) {
     const errMsg = 'Invalid checkout folder for this push.';
     action.proxyGitPath = undefined;
     step.setError(errMsg);
