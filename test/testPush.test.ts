@@ -460,6 +460,21 @@ describe('Push API', () => {
     expect(res.body.message).toBe('Authentication required');
   });
 
+  it('should return 401 if not logged in when listing pushes', async () => {
+    await db.writeAudit(TEST_PUSH);
+    const res = await request(app).get('/api/v1/push').query({ blocked: true });
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Authentication required');
+    expect(JSON.stringify(res.body)).not.toContain(TEST_PUSH.id);
+  });
+
+  it('should return 401 if not logged in when fetching a push by id', async () => {
+    await db.writeAudit(TEST_PUSH);
+    const res = await request(app).get(`/api/v1/push/${TEST_PUSH.id}`);
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Authentication required');
+  });
+
   it('should fetch all pushes', async () => {
     await db.writeAudit(TEST_PUSH);
     await loginAsApprover();
