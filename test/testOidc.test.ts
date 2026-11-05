@@ -175,3 +175,223 @@ describe('OIDC auth method', () => {
     });
   });
 });
+
+describe('OIDC user identity binding', () => {
+  type StoredUser = {
+    username: string;
+    email: string;
+    password: string | null;
+    gitAccount: string;
+    admin: boolean;
+    oidcId?: string;
+  };
+  let users: StoredUser[];
+  let oidc: typeof import('../src/service/passport/oidc');
+
+  const login = async (userInfo: Record<string, unknown>) => {
+    const done = vi.fn();
+    await oidc.handleUserAuthentication(userInfo as any, done);
+    return done.mock.calls[0] as [unknown, Partial<StoredUser> | undefined];
+  };
+
+  beforeEach(async () => {
+    users = [];
+    const fakeDb = {
+      findUser: vi.fn(
+        async (u: string) => users.find((x) => x.username === u.toLowerCase()) ?? null,
+      ),
+      findUserByEmail: vi.fn(
+        async (e: string) => users.find((x) => x.email === e.toLowerCase()) ?? null,
+      ),
+      findUserByOIDC: vi.fn(async (id: string) => users.find((x) => x.oidcId === id) ?? null),
+      createUser: vi.fn(
+        async (
+          username: string,
+          _password: string,
+          email: string,
+          gitAccount: string,
+          admin: boolean,
+          oidcId: string,
+        ) => {
+          if (users.some((x) => x.username === username.toLowerCase())) {
+            throw new Error(`user ${username} already exists`);
+          }
+          if (users.some((x) => x.email === email.toLowerCase())) {
+            throw new Error(`A user with email ${email} already exists`);
+          }
+          users.push({
+            username: username.toLowerCase(),
+            email: email.toLowerCase(),
+            password: oidcId ? null : 'hashed',
+            gitAccount,
+            admin,
+            ...(oidcId ? { oidcId } : {}),
+          });
+        },
+      ),
+      updateUser: vi.fn(async (user: StoredUser) => {
+        const existing = users.find((x) => x.username === user.username);
+        if (existing) Object.assign(existing, user);
+      }),
+    };
+
+    vi.resetModules();
+    vi.doMock('../src/db', () => fakeDb);
+    oidc = await import('../src/service/passport/oidc');
+  });
+
+  afterEach(() => {
+    vi.doUnmock('../src/db');
+  });
+
+  it('persists the subject and resolves the same account on a repeat login', async () => {
+    const [err1, first] = await login({ sub: 'sub-alice', email: 'alice@acme.example' });
+    expect(err1).toBeNull();
+    expect(first).toMatchObject({ username: 'alice', oidcId: 'sub-alice' });
+
+    const [err2, second] = await login({ sub: 'sub-alice', email: 'alice@acme.example' });
+    expect(err2).toBeNull();
+    expect(second).toMatchObject({ username: 'alice', oidcId: 'sub-alice' });
+    expect(users).toHaveLength(1);
+  });
+
+  it('gives a different identity with the same email local part a distinct username', async () => {
+    await login({ sub: 'sub-alice', email: 'alice@acme.example' });
+
+    const [err, other] = await login({ sub: 'sub-mallory', email: 'alice@partner.example' });
+    expect(err).toBeNull();
+    expect(other?.username).toMatch(/^alice-[0-9a-f]{8}$/);
+    expect(other?.oidcId).toBe('sub-mallory');
+    expect(users.find((u) => u.username === 'alice')?.oidcId).toBe('sub-alice');
+  });
+
+  it('does not let an OIDC identity take over a local account username', async () => {
+    users.push({
+      username: 'bob',
+      email: 'bob@acme.example',
+      password: 'hashed',
+      gitAccount: 'bob',
+      admin: true,
+    });
+
+    const [err, user] = await login({ sub: 'sub-bob2', email: 'bob@other.example' });
+    expect(err).toBeNull();
+    expect(user?.username).not.toBe('bob');
+    expect(users.find((u) => u.username === 'bob')?.oidcId).toBeUndefined();
+  });
+
+  it('does not bind an OIDC identity to an existing local account by email', async () => {
+    users.push({
+      username: 'carol',
+      email: 'carol@acme.example',
+      password: 'hashed',
+      gitAccount: 'carol',
+      admin: false,
+    });
+
+    const [err, user] = await login({ sub: 'sub-carol', email: 'carol@acme.example' });
+    expect((err as Error).message).toMatch(/already exists/);
+    expect(user).toBeUndefined();
+    expect(users.find((u) => u.username === 'carol')?.oidcId).toBeUndefined();
+  });
+
+  it('binds a legacy OIDC account (no stored subject) on exact email match', async () => {
+    users.push({
+      username: 'dave',
+      email: 'dave@acme.example',
+      password: null,
+      gitAccount: 'Edit me',
+      admin: false,
+    });
+
+    const [err, user] = await login({
+      sub: 'sub-dave',
+      email: 'dave@acme.example',
+      email_verified: true,
+    });
+    expect(err).toBeNull();
+    expect(user).toMatchObject({ username: 'dave', oidcId: 'sub-dave' });
+    expect(users).toHaveLength(1);
+  });
+
+  it('does not bind a legacy OIDC account unless the provider verified the email', async () => {
+    users.push({
+      username: 'dave',
+      email: 'dave@acme.example',
+      password: null,
+      gitAccount: 'Edit me',
+      admin: false,
+    });
+
+    const [err, user] = await login({ sub: 'sub-dave2', email: 'dave@acme.example' });
+    expect((err as Error).message).toMatch(/already exists/);
+    expect(user).toBeUndefined();
+    expect(users.find((u) => u.username === 'dave')?.oidcId).toBeUndefined();
+  });
+
+  it("never resolves a username session as another user's OIDC subject", async () => {
+    users.push(
+      {
+        username: 'sub-victim',
+        email: 'l@acme.example',
+        password: 'hashed',
+        gitAccount: 'l',
+        admin: false,
+      },
+      {
+        username: 'victim',
+        email: 'v@acme.example',
+        password: null,
+        gitAccount: 'v',
+        admin: true,
+        oidcId: 'sub-victim',
+      },
+    );
+
+    const localId = oidc.serializeSessionId(users[0]);
+    const oidcId = oidc.serializeSessionId(users[1]);
+    expect(localId).not.toEqual(oidcId);
+    expect((await oidc.deserializeSessionId(localId))?.username).toBe('sub-victim');
+    expect((await oidc.deserializeSessionId(oidcId))?.username).toBe('victim');
+  });
+
+  it('resolves legacy string session ids only as OIDC subjects', async () => {
+    users.push(
+      {
+        username: 'admin',
+        email: 'a@acme.example',
+        password: 'hashed',
+        gitAccount: 'a',
+        admin: true,
+      },
+      {
+        username: 'oddsub',
+        email: 'o@acme.example',
+        password: null,
+        gitAccount: 'o',
+        admin: false,
+        oidcId: 'user:admin',
+      },
+    );
+
+    expect((await oidc.deserializeSessionId('user:admin'))?.username).toBe('oddsub');
+    expect(await oidc.deserializeSessionId('admin')).toBeNull();
+  });
+
+  it('rejects a new account when the provider marks the email unverified', async () => {
+    const [err, user] = await login({
+      sub: 'sub-eve',
+      email: 'eve@acme.example',
+      email_verified: false,
+    });
+    expect((err as Error).message).toMatch(/not verified/);
+    expect(user).toBeUndefined();
+    expect(users).toHaveLength(0);
+  });
+
+  it('rejects a profile without a subject', async () => {
+    const [err] = await login({ email: 'nosub@acme.example' });
+    expect((err as Error).message).toMatch(/No subject/);
+    expect(users).toHaveLength(0);
+  });
+});

@@ -413,6 +413,27 @@ describe('Database clients', () => {
     ).rejects.toThrow(`A user with email ${TEST_USER.email} already exists`);
   });
 
+  it('should persist the OIDC subject when creating an OIDC user', async () => {
+    const oidcUsername = 'db-oidc-u1';
+    await db.deleteUser(oidcUsername);
+
+    await db.createUser(oidcUsername, '', 'db-oidc@test.com', 'Edit me', false, 'oidc-sub-123');
+
+    const user = await db.findUserByOIDC('oidc-sub-123');
+    expect(user?.username).toBe(oidcUsername);
+    expect(user?.oidcId).toBe('oidc-sub-123');
+    expect(user?.password).toBeNull();
+
+    await db.deleteUser(oidcUsername);
+  });
+
+  it('should store a null OIDC subject for local users', async () => {
+    await ensureUserExists();
+
+    const user = await db.findUser(TEST_USER.username);
+    expect(user?.oidcId ?? null).toBeNull();
+  });
+
   it('should be able to find a user', async () => {
     await ensureUserExists();
 
