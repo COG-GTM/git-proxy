@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import { PublicUser, User as DbUser } from '../../db/types';
+import { Request } from 'express';
+import { PublicUser, QueryValue, User as DbUser } from '../../db/types';
 
 interface User extends Express.User {
   username: string;
@@ -24,6 +25,34 @@ interface User extends Express.User {
 export function isAdminUser(user?: Express.User): user is User & { admin: true } {
   return user !== null && user !== undefined && (user as User).admin === true;
 }
+
+/**
+ * Builds a database filter from a request query string. Only allowlisted keys
+ * with plain string values are kept; operator keys (`$...`), dotted paths,
+ * arrays and nested objects are dropped so callers cannot inject query
+ * operators. `"true"`/`"false"` are coerced to booleans.
+ */
+export const buildQueryFilter = <T extends Record<string, QueryValue>>(
+  rawQuery: Request['query'],
+  allowedKeys: readonly (keyof T & string)[],
+): Partial<T> => {
+  const filter: Partial<T> = {};
+
+  for (const key of Object.keys(rawQuery)) {
+    if (key.startsWith('$') || key.includes('.')) continue;
+    if (!allowedKeys.includes(key)) continue;
+
+    const rawValue = rawQuery[key];
+    if (typeof rawValue !== 'string') continue;
+
+    let value: QueryValue = rawValue;
+    if (rawValue === 'true') value = true;
+    if (rawValue === 'false') value = false;
+    filter[key as keyof T] = value as T[keyof T];
+  }
+
+  return filter;
+};
 
 export const toPublicUser = (user: DbUser): PublicUser => {
   return {
