@@ -23,6 +23,7 @@ import { Action, Step } from '../../actions';
 import { CommitContent, CommitData, CommitHeader, PackMeta, PersonLine } from '../types';
 import {
   BRANCH_PREFIX,
+  COMMIT_ID_REGEX,
   EMPTY_COMMIT_HASH,
   PACK_SIGNATURE,
   PACKET_SIZE,
@@ -77,6 +78,11 @@ async function exec(req: Request, action: Action): Promise<Action> {
 
     const [oldCommit, newCommit, ref] = parts;
 
+    if (!COMMIT_ID_REGEX.test(oldCommit) || !COMMIT_ID_REGEX.test(newCommit)) {
+      step.log('Invalid commit id in ref update.');
+      throw new Error('Your push has been blocked. Invalid commit id in ref update.');
+    }
+
     // Strip everything after NUL, which is cap-list from
     // https://git-scm.com/docs/http-protocol#_smart_server_response
     action.branch = ref.replace(/\0.*/, '').trim();
@@ -106,7 +112,12 @@ async function exec(req: Request, action: Action): Promise<Action> {
       step.log('No commit data found when parsing push.');
     } else {
       if (action.commitFrom === EMPTY_COMMIT_HASH) {
-        action.commitFrom = action.commitData[action.commitData.length - 1].parent;
+        const parent = action.commitData[action.commitData.length - 1].parent;
+        if (!COMMIT_ID_REGEX.test(parent)) {
+          step.log('Invalid parent commit id in pack data.');
+          throw new Error('Your push has been blocked. Invalid parent commit id.');
+        }
+        action.commitFrom = parent;
       }
 
       const { committer, committerEmail } = action.commitData[action.commitData.length - 1];

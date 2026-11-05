@@ -461,6 +461,37 @@ describe('parsePackFile', () => {
       expect(step.logs[1]).toContain('Expected 3, but got 4');
     });
 
+    it.each([
+      ['--output=/tmp/x', 'b'.repeat(40)],
+      ['a'.repeat(40), 'b/../newdir'],
+      ['a'.repeat(39), 'b'.repeat(40)],
+      ['A'.repeat(40), 'b'.repeat(40)],
+      ['a'.repeat(40), '-' + 'b'.repeat(39)],
+    ])('should reject a ref update with invalid commit ids (%s %s)', async (oldCommit, newCommit) => {
+      const ref = 'refs/heads/main';
+      req.body = createPacketLineBuffer([`${oldCommit} ${newCommit} ${ref}\0capa\n`]);
+
+      const result = await exec(req, action);
+
+      expect(result).toBe(action);
+      const step = action.steps[0];
+      expect(step.stepName).toBe('parsePackFile');
+      expect(step.error).toBe(true);
+      expect(step.errorMessage).toContain('Invalid commit id in ref update');
+      expect(action.setCommit).not.toHaveBeenCalled();
+    });
+
+    it('should accept 64 character SHA-256 commit ids', async () => {
+      const oldCommit = 'a'.repeat(64);
+      const newCommit = 'b'.repeat(64);
+      req.body = createPacketLineBuffer([`${oldCommit} ${newCommit} refs/heads/main\0capa\n`]);
+
+      await exec(req, action);
+
+      expect(action.setCommit).toHaveBeenCalledWith(oldCommit, newCommit);
+      expect(action.steps[0].errorMessage).toContain('PACK data is missing');
+    });
+
     it('should add error step if PACK data is missing', async () => {
       const oldCommit = 'a'.repeat(40);
       const newCommit = 'b'.repeat(40);
@@ -668,6 +699,29 @@ describe('parsePackFile', () => {
 
       // Check parsed commit data reflects no parent (zero hash)
       expect(action.commitData[0].parent).toBe(oldCommit);
+    });
+
+    it('should reject a new branch push whose parent commit id is invalid', async () => {
+      const oldCommit = '0'.repeat(40);
+      const newCommit = 'b'.repeat(40);
+      const packetLine = `${oldCommit} ${newCommit} refs/heads/main\0capabilities\n`;
+
+      const commitContent =
+        'tree 1234567890abcdef1234567890abcdef12345678\n' +
+        'parent --output=/tmp/x\n' +
+        'author Test Author <test@example.com> 1234567890 +0000\n' +
+        'committer Test Committer <committer@example.com> 1234567890 +0100\n\n' +
+        'feat: bad parent';
+
+      const packBuffer = createSamplePackBuffer(1, commitContent, 1);
+      req.body = Buffer.concat([createPacketLineBuffer([packetLine]), packBuffer]);
+
+      await exec(req, action);
+
+      const step = action.steps.find((s) => s.stepName === 'parsePackFile');
+      expect(step.error).toBe(true);
+      expect(step.errorMessage).toContain('Invalid parent commit id');
+      expect(action.commitFrom).toBe(oldCommit);
     });
 
     it('should handle commit with multiple parents (merge commit)', async () => {
