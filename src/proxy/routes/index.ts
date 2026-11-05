@@ -23,6 +23,7 @@ import { processUrlPath, validGitRequest } from './helper';
 import { getAllProxiedHosts } from '../../db';
 import { ProxyOptions } from 'express-http-proxy';
 import { handleErrorAndLog } from '../../utils/errors';
+import { MAX_PACK_BODY_SIZE } from '../processors/constants';
 
 enum ActionType {
   ALLOWED = 'Allowed',
@@ -178,7 +179,7 @@ const extractRawBody = async (req: Request, res: Response, next: NextFunction) =
   req.pipe(pluginStream);
 
   try {
-    const buf = await getRawBody(pluginStream, { limit: '1gb' });
+    const buf = await getRawBody(pluginStream, { limit: MAX_PACK_BODY_SIZE });
     req.bodyRaw = buf;
     req.pipe = (dest, opts) => proxyStream.pipe(dest, opts);
     next();

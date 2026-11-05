@@ -31,6 +31,7 @@ import { PluginLoader } from '../plugin';
 import chain from './chain';
 import { Repo } from '../db/types';
 import { serverConfig } from '../config/env';
+import { MAX_PACK_BODY_SIZE } from './processors/constants';
 
 const { GIT_PROXY_SERVER_PORT: proxyHttpPort, GIT_PROXY_HTTPS_SERVER_PORT: proxyHttpsPort } =
   serverConfig;
@@ -45,7 +46,7 @@ interface ServerOptions {
 
 const getServerOptions = (): ServerOptions => ({
   inflate: true,
-  limit: '100000kb',
+  limit: MAX_PACK_BODY_SIZE,
   type: '*/*',
   key: getTLSEnabled() && getTLSKeyPemPath() ? fs.readFileSync(getTLSKeyPemPath()!) : undefined,
   cert: getTLSEnabled() && getTLSCertPemPath() ? fs.readFileSync(getTLSCertPemPath()!) : undefined,

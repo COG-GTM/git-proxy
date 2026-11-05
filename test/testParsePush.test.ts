@@ -27,7 +27,12 @@ import {
   getPackMeta,
   parsePacketLines,
 } from '../src/proxy/processors/push-action/parsePush';
-import { EMPTY_COMMIT_HASH, FLUSH_PACKET, PACK_SIGNATURE } from '../src/proxy/processors/constants';
+import {
+  EMPTY_COMMIT_HASH,
+  FLUSH_PACKET,
+  MAX_INFLATED_OBJECT_SIZE,
+  PACK_SIGNATURE,
+} from '../src/proxy/processors/constants';
 import { CommitContent } from '../src/proxy/processors/types';
 import { Action } from '../src/proxy/actions/Action';
 import { Request } from 'express';
@@ -392,6 +397,35 @@ describe('parsePackFile', () => {
         getContents(brokenContentBuffer, TEST_MULTI_OBJ_COMMIT_CONTENT.length),
       ).rejects.toThrowError(/Error during/);
     });
+
+    it('should stop decompressing once the declared number of entries has been read', async () => {
+      const packBuffer = createMultiObjectSamplePackBuffer();
+      const [, contentBuffer] = getPackMeta(packBuffer);
+
+      const gitObjects = await getContents(contentBuffer, 2);
+
+      expect(gitObjects.length).toBe(2);
+      expect(gitObjects[0].content).toBe(TEST_MULTI_OBJ_COMMIT_CONTENT[0].content);
+      expect(gitObjects[1].content).toBe(TEST_MULTI_OBJ_COMMIT_CONTENT[1].content);
+    });
+
+    it('should quickly reject an object that inflates beyond MAX_INFLATED_OBJECT_SIZE', async () => {
+      const bombSize = MAX_INFLATED_OBJECT_SIZE + 1;
+      const compressed = deflateSync(Buffer.alloc(bombSize));
+      expect(compressed.length).toBeLessThan(1024 * 1024);
+
+      const contentBuffer = Buffer.concat([
+        encodeGitObjectHeader(3, bombSize),
+        compressed,
+        Buffer.alloc(20),
+      ]);
+
+      const start = Date.now();
+      await expect(getContents(contentBuffer, 1)).rejects.toThrowError(
+        /exceeds the maximum inflated object size/,
+      );
+      expect(Date.now() - start).toBeLessThan(5000);
+    }, 20000);
   });
 
   describe('exec', () => {
