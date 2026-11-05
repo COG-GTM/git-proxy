@@ -153,6 +153,23 @@ describe('getDiff', () => {
     expect(result.steps[0].content).not.toBeNull();
     expect(result.steps[0].content!.length).toBeGreaterThan(0);
   });
+  it('should not treat commitFrom as a git option', async () => {
+    const outputFile = path.join(__dirname, 'getDiff-output-injection.txt');
+    await fs.rm(outputFile, { force: true });
+
+    const action = new Action('1234567890', 'push', 'POST', 1234567890, 'test/repo.git');
+    action.proxyGitPath = __dirname;
+    action.repoName = 'temp-test-repo';
+    action.commitFrom = `--output=${outputFile}`;
+    action.commitTo = 'HEAD';
+    action.commitData = [{ ...SAMPLE_COMMIT }];
+
+    const result = await exec({} as Request, action);
+
+    expect(result.steps[0].error).toBe(true);
+    await expect(fs.access(outputFile)).rejects.toThrow();
+  });
+
   describe('fuzzing', () => {
     it('should handle random action inputs without crashing', async function () {
       // Not comprehensive but helps prevent crashing on bad input

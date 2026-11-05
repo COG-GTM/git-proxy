@@ -22,6 +22,8 @@ export const FLUSH_PACKET = '0000';
 export const PACK_SIGNATURE = 'PACK';
 export const PACKET_SIZE = 4;
 export const GIT_OBJECT_TYPE_COMMIT = 1;
+/** Full SHA-1 (40) or SHA-256 (64) object id in lowercase hex. */
+export const COMMIT_ID_REGEX = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 export const SAMPLE_COMMIT: CommitData = {
   tree: '1234567890',

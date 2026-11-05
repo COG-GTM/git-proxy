@@ -26,7 +26,7 @@ const isEmptyBranch = async (action: Action): Promise<boolean> => {
     try {
       const git = simpleGit(`${action.proxyGitPath}/${action.repoName}`);
 
-      const type = await git.raw(['cat-file', '-t', action.commitTo || '']);
+      const type = await git.raw(['cat-file', '-t', '--end-of-options', action.commitTo || '']);
       return type.trim() === 'commit';
     } catch (error: unknown) {
       handleErrorAndLog(error, `Error checking if branch is empty`);

@@ -92,7 +92,7 @@ describe('checkEmptyBranch', () => {
       const result = await exec(req, action);
 
       expect(simpleGitMock).toHaveBeenCalledWith('/tmp/gitproxy/test-repo');
-      expect(gitRawMock).toHaveBeenCalledWith(['cat-file', '-t', action.commitTo]);
+      expect(gitRawMock).toHaveBeenCalledWith(['cat-file', '-t', '--end-of-options', action.commitTo]);
 
       const step = result.steps.find((s) => s.stepName === 'checkEmptyBranch');
       expect(step).toBeDefined();
@@ -105,7 +105,7 @@ describe('checkEmptyBranch', () => {
 
       const result = await exec(req, action);
 
-      expect(gitRawMock).toHaveBeenCalledWith(['cat-file', '-t', action.commitTo]);
+      expect(gitRawMock).toHaveBeenCalledWith(['cat-file', '-t', '--end-of-options', action.commitTo]);
 
       const step = result.steps.find((s) => s.stepName === 'checkEmptyBranch');
       expect(step).toBeDefined();

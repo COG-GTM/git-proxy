@@ -16,6 +16,7 @@
 
 import { Request } from 'express';
 import fs from 'fs';
+import path from 'path';
 import git from 'isomorphic-git';
 import gitHttpClient from 'isomorphic-git/http/node';
 
@@ -27,6 +28,22 @@ const dir = './.remote';
 const exec = async (req: Request, action: Action): Promise<Action> => {
   const step = new Step('pullRemote');
   action.proxyGitPath = `${dir}/${action.id}`;
+
+  // the checkout folder must be a single directory directly inside .remote
+  const relativePath = path.relative(path.resolve(dir), path.resolve(action.proxyGitPath));
+  if (
+    !action.id ||
+    action.id === '.' ||
+    action.id === '..' ||
+    path.basename(action.id) !== action.id ||
+    relativePath !== action.id
+  ) {
+    const errMsg = 'Invalid checkout folder for this push.';
+    action.proxyGitPath = undefined;
+    step.setError(errMsg);
+    action.addStep(step);
+    throw new Error(errMsg);
+  }
 
   //the specific checkout folder should not exist
   // - fail out if it does to avoid concurrent processing of conflicting requests

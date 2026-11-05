@@ -131,6 +131,21 @@ describe('checkHiddenCommits.exec', () => {
     expect(action.error).toBe(false);
   });
 
+  it('passes the revision range after --end-of-options', async () => {
+    action.commitFrom = 'a'.repeat(40);
+    action.commitTo = 'b'.repeat(40);
+    mockSpawnSync.mockReturnValueOnce({ stdout: '' }).mockReturnValueOnce({ stdout: '' });
+
+    await checkHidden(req, action);
+
+    expect(mockSpawnSync).toHaveBeenNthCalledWith(
+      1,
+      'git',
+      ['rev-list', '--end-of-options', `${'a'.repeat(40)}..${'b'.repeat(40)}`],
+      expect.objectContaining({ encoding: 'utf-8' }),
+    );
+  });
+
   it('throws if commitFrom or commitTo is missing', async () => {
     delete action.commitFrom;
 

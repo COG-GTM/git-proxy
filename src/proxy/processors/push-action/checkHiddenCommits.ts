@@ -36,7 +36,10 @@ const exec = async (_req: Request, action: Action): Promise<Action> => {
     // build introducedCommits set
     const introducedCommits = new Set<string>();
     const revRange = oldOid === EMPTY_COMMIT_HASH ? newOid : `${oldOid}..${newOid}`;
-    const revList = spawnSync('git', ['rev-list', revRange], { cwd: repoPath, encoding: 'utf-8' })
+    const revList = spawnSync('git', ['rev-list', '--end-of-options', revRange], {
+      cwd: repoPath,
+      encoding: 'utf-8',
+    })
       .stdout.trim()
       .split('\n')
       .filter(Boolean);
