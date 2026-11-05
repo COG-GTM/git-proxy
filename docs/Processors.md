@@ -92,13 +92,14 @@ The pusher's SCM account is resolved as follows:
 
 - `github.com`: the token owner's `login` from `GET https://api.github.com/user`
 - GitLab hosts (hostname contains `gitlab`): the token owner's `username` from `GET <host>/api/v4/user`
+- Hosts listed in the `basicAuthHosts` configuration (self-hosted servers that verify the Basic auth username and password themselves): the Basic auth username, once the server accepts the credentials for `git-receive-pack` on the repository
 - Any other git server: the push is blocked, since the Basic auth username alone does not prove who owns the credentials
 
 The SCM account is then matched (case-insensitively) against the `gitAccount` of GitProxy users. On success, `action.user` and `action.userEmail` are set to that GitProxy user's username and email; these are what the dashboard uses to prevent a reviewer from approving or rejecting their own push.
 
 This step will fail on various scenarios such as:
 
-- The push has no valid Basic credentials, the SCM provider cannot resolve the token owner, or the host is not GitHub/GitLab
+- The push has no valid Basic credentials, the SCM provider cannot resolve the token owner, or the host is not GitHub/GitLab or listed in `basicAuthHosts`
 - The SCM account matches multiple GitProxy users
 - No GitProxy user has that SCM account as their `gitAccount`
 - The user isn't in the repo's contributor (`canPush`) or approver (`canAuthorise`) list

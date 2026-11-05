@@ -345,6 +345,14 @@ This will limit the number of **requests made to the API** to 150 per minute.
 
 Optionally, a `statusCode` and a `message` can be specified to override the default responses.
 
+#### `basicAuthHosts`
+
+Hostnames (optionally with port) of self-hosted git servers that verify the Basic auth username and password themselves, such as servers backed by htpasswd or LDAP. For pushes to these hosts, GitProxy confirms the credentials are accepted by the server and then identifies the pusher by the Basic auth username, which must match a GitProxy user's `gitAccount`. Pushes to hosts that are neither GitHub, GitLab nor listed here are blocked. Never list a server that accepts any username alongside a token.
+
+```json
+"basicAuthHosts": ["git.internal.example.com"]
+```
+
 #### `privateOrganizations` (deprecated)
 
 Formerly used to block organizations, replaced by `commitConfig.diff.block.providers`.

@@ -307,6 +307,11 @@ export const getDomains = () => {
   return config.domains || {};
 };
 
+export const getBasicAuthHosts = (): string[] => {
+  const config = loadFullConfiguration();
+  return config.basicAuthHosts || [];
+};
+
 export const getUIRouteAuth = () => {
   const config = loadFullConfiguration();
   return config.uiRouteAuth || {};

@@ -277,6 +277,13 @@
       "description": "Flag to enable CSRF protections for UI",
       "type": "boolean"
     },
+    "basicAuthHosts": {
+      "description": "Hostnames of self-hosted git servers that verify the Basic auth username and password themselves (e.g. via htpasswd or LDAP). For these hosts, GitProxy identifies the pusher by the Basic auth username once the server accepts the credentials. Do not list servers that accept any username alongside a token.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "plugins": {
       "type": "array",
       "description": "List of plugins to integrate on GitProxy's push or pull actions. Each value is either a file path or a module name.",

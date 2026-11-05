@@ -37,6 +37,13 @@ export interface GitProxyConfig {
    */
   authorisedList?: AuthorisedRepo[];
   /**
+   * Hostnames of self-hosted git servers that verify the Basic auth username and password
+   * themselves (e.g. via htpasswd or LDAP). For these hosts, GitProxy identifies the pusher
+   * by the Basic auth username once the server accepts the credentials. Do not list servers
+   * that accept any username alongside a token.
+   */
+  basicAuthHosts?: string[];
+  /**
    * Block commits based on rules defined over author/committer e-mail addresses, commit
    * message content and diff content
    */
@@ -763,6 +770,7 @@ const typeMap: any = {
         typ: u(undefined, a(r('AuthenticationElement'))),
       },
       { json: 'authorisedList', js: 'authorisedList', typ: u(undefined, a(r('AuthorisedRepo'))) },
+      { json: 'basicAuthHosts', js: 'basicAuthHosts', typ: u(undefined, a('')) },
       { json: 'commitConfig', js: 'commitConfig', typ: u(undefined, r('CommitConfig')) },
       { json: 'configurationSources', js: 'configurationSources', typ: u(undefined, 'any') },
       { json: 'contactEmail', js: 'contactEmail', typ: u(undefined, '') },

@@ -17,6 +17,7 @@
 import axios from 'axios';
 import { Action, Step } from '../actions';
 import { getErrorMessage } from '../../utils/errors';
+import { getBasicAuthHosts } from '../../config';
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 10000;
 
@@ -42,12 +43,21 @@ export const parseBasicAuth = (header?: string): BasicCredentials | null => {
   return { username, password };
 };
 
+const isBasicAuthHost = (upstream: URL): boolean =>
+  getBasicAuthHosts().some((host) => {
+    const configured = host.toLowerCase();
+    return (
+      configured === upstream.host.toLowerCase() || configured === upstream.hostname.toLowerCase()
+    );
+  });
+
 /**
  * Resolves the SCM account that owns the credentials presented to the proxy.
  *
  * GitHub and GitLab accept any username alongside a token, so the account is
- * resolved by asking the provider who the token belongs to. The Basic username is
- * never trusted on its own, so pushes to other git servers cannot be authenticated.
+ * resolved by asking the provider who the token belongs to. For servers listed in
+ * basicAuthHosts, which verify the Basic username themselves, the username is trusted
+ * once the server accepts the credentials. Pushes to any other host cannot be authenticated.
  * @param {string} url The upstream repository URL
  * @param {string | undefined} authHeader The Authorization header sent by the git client
  * @param {Step} step The step used for logging
@@ -94,6 +104,16 @@ export const getAuthenticatedGitAccount = async (
         { headers, timeout: IDENTITY_LOOKUP_TIMEOUT_MS },
       );
       return data?.username || null;
+    }
+
+    if (isBasicAuthHost(upstream)) {
+      await axios.get(`${upstream.origin}${upstream.pathname}/info/refs`, {
+        params: { service: 'git-receive-pack' },
+        headers: { Authorization: authHeader!, 'User-Agent': 'git-proxy' },
+        timeout: IDENTITY_LOOKUP_TIMEOUT_MS,
+        validateStatus: (status) => status === 200,
+      });
+      return credentials.username || null;
     }
   } catch (error: unknown) {
     step.log(`Unable to resolve the account for the push credentials: ${getErrorMessage(error)}`);
