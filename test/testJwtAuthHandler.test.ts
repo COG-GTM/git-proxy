@@ -301,7 +301,7 @@ describe('JWT', () => {
           {
             type: 'openidconnect',
             enabled: true,
-            oidcConfig: { issuer: `${jwtConfig.authorityURL}/` },
+            oidcConfig: { issuer: jwtConfig.authorityURL! },
           } as any,
         ]);
       });
@@ -358,6 +358,23 @@ describe('JWT', () => {
         expect(findSpy).not.toHaveBeenCalled();
         expect(req.user.username).toBeUndefined();
         expect(req.user.email).toBeUndefined();
+      });
+
+      it('should not link identity when issuers differ only by a trailing slash', async () => {
+        vi.spyOn(config, 'getAuthMethods').mockReturnValue([
+          {
+            type: 'openidconnect',
+            enabled: true,
+            oidcConfig: { issuer: `${jwtConfig.authorityURL}/` },
+          } as any,
+        ]);
+        req.header.mockReturnValue(`Bearer ${signToken(forgedPayload)}`);
+        const findSpy = vi.spyOn(db, 'findUserByOIDC');
+
+        await jwtAuthHandler(jwtConfig)(req, res, next);
+
+        expect(findSpy).not.toHaveBeenCalled();
+        expect(req.user.username).toBeUndefined();
       });
 
       it('should not link identity when no OIDC login is configured', async () => {

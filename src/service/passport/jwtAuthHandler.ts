@@ -27,11 +27,9 @@ import {
 
 export const type = 'jwt';
 
-const normalizeIssuer = (issuer: string) => issuer.replace(/\/+$/, '');
-
 // Stored oidcId values are subjects issued by the UI OIDC provider. A subject is
 // only unique per issuer, so JWT subjects are matched against them only when
-// the JWT authority is that same issuer.
+// the JWT authority is exactly that same issuer string.
 const sharesIssuerWithOidcLogin = (authorityURL: string): boolean => {
   let authMethods: AuthenticationElement[];
   try {
@@ -41,7 +39,7 @@ const sharesIssuerWithOidcLogin = (authorityURL: string): boolean => {
   }
   const oidcIssuer = authMethods.find((method) => method.type.toLowerCase() === 'openidconnect')
     ?.oidcConfig?.issuer;
-  return !!oidcIssuer && normalizeIssuer(oidcIssuer) === normalizeIssuer(authorityURL);
+  return !!oidcIssuer && oidcIssuer === authorityURL;
 };
 
 export const jwtAuthHandler = (overrideConfig: JwtConfig | null = null) => {
