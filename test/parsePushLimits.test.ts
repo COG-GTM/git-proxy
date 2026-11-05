@@ -72,4 +72,22 @@ describe('parsePush inflation limits', () => {
       /PACK exceeds the maximum inflated size of 4096 bytes/,
     );
   });
+
+  it('accepts an empty object once the pack budget is exactly exhausted', async () => {
+    const contents = await getContents(buildContents([1024, 1024, 1024, 1024, 0]), 5);
+
+    expect(contents.map((c) => c.content.length)).toEqual([1024, 1024, 1024, 1024, 0]);
+  });
+
+  it('yields to the event loop while inflating', async () => {
+    let immediateRan = false;
+    setImmediate(() => {
+      immediateRan = true;
+    });
+    const parsing = getContents(buildContents([1000, 1000, 1000, 1000]), 4).then(
+      () => immediateRan,
+    );
+
+    expect(await parsing).toBe(true);
+  });
 });

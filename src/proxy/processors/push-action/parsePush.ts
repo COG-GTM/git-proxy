@@ -17,7 +17,8 @@
 import { Request } from 'express';
 import fs from 'fs';
 import lod from 'lodash';
-import { inflateSync, type Zlib } from 'zlib';
+import { promisify } from 'util';
+import { inflate, type InflateOptions, type Zlib } from 'zlib';
 
 import { Action, Step } from '../../actions';
 import { CommitContent, CommitData, CommitHeader, PackMeta, PersonLine } from '../types';
@@ -463,6 +464,12 @@ const parseGitObjectHeader = (buffer: Buffer, offset: number): GitObjectHeader =
   return header;
 };
 
+// async zlib runs on the libuv threadpool so large objects don't block the event loop
+const inflateAsync = promisify(inflate) as unknown as (
+  buf: Buffer,
+  options: InflateOptions & { info: true },
+) => Promise<{ buffer: Buffer; engine: Zlib }>;
+
 /**
  * Decompresses the stream of headers and deflated git objects that follow
  * the 12-byte PACK file headers (which should already have been removed from
@@ -498,20 +505,17 @@ const decompressGitObjects = async (
     offset += header.headerLength;
 
     const remaining = MAX_INFLATED_PACK_SIZE - totalInflated;
-    if (remaining <= 0) {
-      throw new Error(
-        `Error during inflation: PACK exceeds the maximum inflated size of ${MAX_INFLATED_PACK_SIZE} bytes`,
-      );
-    }
-    const maxOutputLength = Math.min(MAX_INFLATED_OBJECT_SIZE, remaining);
+    // maxOutputLength must be >= 1; an empty object is still allowed once the budget is exhausted
+    const maxOutputLength = Math.max(1, Math.min(MAX_INFLATED_OBJECT_SIZE, remaining));
+    const packLimitError = `PACK exceeds the maximum inflated size of ${MAX_INFLATED_PACK_SIZE} bytes`;
 
     let inflated: Buffer;
     let consumed: number;
     try {
-      const result = inflateSync(buffer.subarray(offset), {
+      const result = await inflateAsync(buffer.subarray(offset), {
         info: true,
         maxOutputLength,
-      }) as unknown as { buffer: Buffer; engine: Zlib };
+      });
       inflated = result.buffer;
       consumed = result.engine.bytesWritten;
     } catch (e: unknown) {
@@ -519,7 +523,7 @@ const decompressGitObjects = async (
         const limit =
           maxOutputLength === MAX_INFLATED_OBJECT_SIZE
             ? `object at offset ${startOffset} exceeds the maximum inflated object size of ${MAX_INFLATED_OBJECT_SIZE} bytes`
-            : `PACK exceeds the maximum inflated size of ${MAX_INFLATED_PACK_SIZE} bytes`;
+            : packLimitError;
         console.warn(`Error during inflation: ${limit}`);
         throw new Error(`Error during inflation: ${limit}`);
       }
@@ -528,6 +532,10 @@ const decompressGitObjects = async (
       throw new Error(`Error during inflation: ${msg}`);
     }
 
+    if (inflated.length > remaining) {
+      console.warn(`Error during inflation: ${packLimitError}`);
+      throw new Error(`Error during inflation: ${packLimitError}`);
+    }
     totalInflated += inflated.length;
     offset += consumed;
 
