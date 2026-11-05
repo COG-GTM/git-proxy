@@ -20,6 +20,19 @@ import { PushQuery } from '../../db/types';
 import { AttestationConfig } from '../../config/generated/config';
 import { getAttestationConfig } from '../../config';
 import { AttestationAnswer, Rejection } from '../../proxy/processors/types';
+import { buildQueryFilter } from './utils';
+
+const PUSH_FILTER_KEYS = [
+  'blocked',
+  'canceled',
+  'authorised',
+  'rejected',
+  'error',
+  'allowPush',
+  'repo',
+  'branch',
+  'user',
+] as const;
 
 interface AuthoriseRequest {
   params: {
@@ -31,19 +44,9 @@ const router = express.Router();
 
 router.get('/', async (req: Request, res: Response) => {
   const query: Partial<PushQuery> = {
+    ...buildQueryFilter<PushQuery>(req.query, PUSH_FILTER_KEYS),
     type: 'push',
   };
-
-  for (const key in req.query) {
-    if (!key) continue;
-    if (key === 'limit' || key === 'skip') continue;
-
-    const rawValue = req.query[key];
-    let parsedValue: boolean | undefined;
-    if (rawValue === 'false') parsedValue = false;
-    if (rawValue === 'true') parsedValue = true;
-    query[key] = parsedValue ?? rawValue?.toString();
-  }
 
   res.send(await db.getPushes(query));
 });
