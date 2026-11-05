@@ -241,6 +241,8 @@ router.post('/gitAccount', async (req: Request, res: Response) => {
 });
 
 const MIN_PASSWORD_LENGTH = 8;
+// bcrypt silently ignores input beyond 72 bytes
+const MAX_PASSWORD_BYTES = 72;
 
 router.post('/change-password', async (req: Request, res: Response) => {
   if (!req.user) {
@@ -267,6 +269,14 @@ router.post('/change-password', async (req: Request, res: Response) => {
       return;
     }
 
+    if (Buffer.byteLength(newPassword, 'utf8') > MAX_PASSWORD_BYTES) {
+      res
+        .status(400)
+        .send({ message: `New password must be at most ${MAX_PASSWORD_BYTES} bytes long` })
+        .end();
+      return;
+    }
+
     const user = await db.findUser((req.user as User).username);
     if (!user) {
       res.status(404).send({ message: 'User not found' }).end();
@@ -286,7 +296,7 @@ router.post('/change-password', async (req: Request, res: Response) => {
       return;
     }
 
-    if (currentPassword === newPassword) {
+    if (await bcrypt.compare(newPassword, user.password)) {
       res
         .status(400)
         .send({ message: 'New password must be different from the current password' })

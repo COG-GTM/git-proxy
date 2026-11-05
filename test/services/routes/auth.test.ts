@@ -374,6 +374,14 @@ describe('Auth API', () => {
       expect(updateUserSpy).not.toHaveBeenCalled();
     });
 
+    it('should return 400 if the new password exceeds the bcrypt 72-byte limit', async () => {
+      const res = await request(newApp('alice'))
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'a'.repeat(73) });
+      expect(res.status).toBe(400);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
     it('should return 403 if the current password is wrong', async () => {
       const res = await request(newApp('alice'))
         .post('/auth/change-password')
