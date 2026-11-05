@@ -22,6 +22,7 @@ import { Request } from 'express';
 import { Action, Step } from '../../actions';
 import { getAPIs } from '../../../config';
 import { handleErrorAndLogInStep } from '../../../utils/errors';
+import { COMMIT_HASH_REGEX } from '../constants';
 const EXIT_CODE = 99;
 
 function runCommand(
@@ -34,7 +35,7 @@ function runCommand(
   stderr: string;
 }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, shell: true });
+    const child = spawn(command, args, { cwd });
 
     let stdout = '';
     let stderr = '';
@@ -146,6 +147,13 @@ const exec = async (_req: Request, action: Action): Promise<Action> => {
 
   const { commitFrom, commitTo } = action;
   const workingDir = `${action.proxyGitPath}/${action.repoName}`;
+
+  if (!COMMIT_HASH_REGEX.test(commitFrom ?? '') || !COMMIT_HASH_REGEX.test(commitTo ?? '')) {
+    step.setError('Invalid commit range, refusing to run gitleaks.');
+    action.addStep(step);
+    return action;
+  }
+
   step.log(`Scanning range with gitleaks: ${commitFrom}:${commitTo} in ${workingDir}`);
 
   try {
@@ -171,7 +179,7 @@ const exec = async (_req: Request, action: Action): Promise<Action> => {
       'git',
       // not using --no-merges to be sure we're scanning the diff
       // only add ^ if the commitFrom isn't the repo's rootCommit
-      `--log-opts='--first-parent ${rootCommit === commitFrom ? rootCommit : `${commitFrom}^`}..${commitTo}'`,
+      `--log-opts=--first-parent ${rootCommit === commitFrom ? rootCommit : `${commitFrom}^`}..${commitTo}`,
     ].filter((v) => typeof v === 'string');
     const gitleaks = await runCommand(workingDir, 'gitleaks', gitleaksArgs);
 

