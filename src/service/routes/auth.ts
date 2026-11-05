@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import bcrypt from 'bcryptjs';
 import express, { Request, Response, NextFunction } from 'express';
 import { getPassport, authStrategies } from '../passport';
 import { getAuthMethods } from '../../config';
@@ -232,6 +233,59 @@ router.post('/gitAccount', async (req: Request, res: Response) => {
         message: msg,
       })
       .end();
+  }
+});
+
+const MIN_PASSWORD_LENGTH = 12;
+
+router.post('/change-password', async (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).send({ message: 'Not logged in' }).end();
+    return;
+  }
+
+  try {
+    const { currentPassword, newPassword } = req.body ?? {};
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+      res
+        .status(400)
+        .send({ message: 'Missing required fields: currentPassword and newPassword are required' })
+        .end();
+      return;
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      res
+        .status(400)
+        .send({ message: `New password must be at least ${MIN_PASSWORD_LENGTH} characters long` })
+        .end();
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      res.status(400).send({ message: 'New password must differ from the current password' }).end();
+      return;
+    }
+
+    const user = await db.findUser((req.user as User).username);
+    if (!user?.password) {
+      res
+        .status(400)
+        .send({ message: 'Password change is only available for local accounts' })
+        .end();
+      return;
+    }
+
+    if (!(await bcrypt.compare(currentPassword, user.password))) {
+      res.status(401).send({ message: 'Current password is incorrect' }).end();
+      return;
+    }
+
+    await db.updateUser({ username: user.username, password: await bcrypt.hash(newPassword, 10) });
+    res.status(200).send({ message: 'Password changed successfully' }).end();
+  } catch (error: unknown) {
+    const msg = handleErrorAndLog(error, 'Failed to change password');
+    res.status(500).send({ message: msg }).end();
   }
 });
 

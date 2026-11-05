@@ -89,6 +89,18 @@ created. Copy it from the logs and change it after logging in. The account is
 only created if it does not already exist, so restarts never reset it. GitProxy
 no longer ships the previous hardcoded `admin/admin` and `user/user` accounts.
 
+Any logged-in local user can rotate their own password:
+
+```
+curl -b git-proxy-cookie -H "Content-Type: application/json" -X POST \
+  -d '{"currentPassword":"<current>","newPassword":"<at-least-12-chars>"}' \
+  http://localhost:8080/api/auth/change-password
+```
+
+On startup, GitProxy logs a warning while an existing `admin` or `user`
+account (created by an older release) still accepts its well-known default
+password. Change or delete those accounts.
+
 ### Validate configuration
 
 To validate your GitProxy configuration, run:

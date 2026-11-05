@@ -72,6 +72,29 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
   return passport;
 };
 
+const KNOWN_DEFAULT_CREDENTIALS: ReadonlyArray<[string, string]> = [
+  ['admin', 'admin'],
+  ['user', 'user'],
+];
+
+/**
+ * Warn at startup while an account seeded by older releases still accepts its
+ * well-known default password (e.g. admin/admin), so operators rotate it via
+ * `POST /api/auth/change-password`.
+ */
+const warnOnKnownDefaultPasswords = async () => {
+  for (const [username, password] of KNOWN_DEFAULT_CREDENTIALS) {
+    const user = await db.findUser(username);
+    if (user?.password && (await bcrypt.compare(password, user.password))) {
+      console.warn(
+        `WARNING: the '${username}' account still uses its well-known default ` +
+          `password. Change it immediately with POST /api/auth/change-password ` +
+          `or delete the account.`,
+      );
+    }
+  }
+};
+
 /**
  * Bootstrap the default admin account.
  *
@@ -82,6 +105,8 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
  * restarts never reset or duplicate it.
  */
 export const createDefaultAdmin = async () => {
+  await warnOnKnownDefaultPasswords();
+
   const existing = await db.findUser('admin');
   if (existing) {
     return;
