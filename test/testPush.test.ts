@@ -294,7 +294,7 @@ describe('Push API', () => {
       .post(`/api/v1/push/${TEST_PUSH.id}/authorise`)
       .send({ reason: 'Testing approval' });
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('Not logged in');
+    expect(res.body.message).toBe('Authentication required');
   });
 
   it('should allow an authorizer to reject a push', async () => {
@@ -457,7 +457,22 @@ describe('Push API', () => {
       .post(`/api/v1/push/${TEST_PUSH.id}/reject`)
       .send({ reason: 'Testing rejection' });
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('Not logged in');
+    expect(res.body.message).toBe('Authentication required');
+  });
+
+  it('should return 401 if not logged in when listing pushes', async () => {
+    await db.writeAudit(TEST_PUSH);
+    const res = await request(app).get('/api/v1/push').query({ blocked: true });
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Authentication required');
+    expect(JSON.stringify(res.body)).not.toContain(TEST_PUSH.id);
+  });
+
+  it('should return 401 if not logged in when fetching a push by id', async () => {
+    await db.writeAudit(TEST_PUSH);
+    const res = await request(app).get(`/api/v1/push/${TEST_PUSH.id}`);
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Authentication required');
   });
 
   it('should fetch all pushes', async () => {
@@ -536,6 +551,6 @@ describe('Push API', () => {
       .post(`/api/v1/push/${TEST_PUSH.id}/cancel`)
       .send({ reason: 'Testing rejection' });
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('Not logged in');
+    expect(res.body.message).toBe('Authentication required');
   });
 });
