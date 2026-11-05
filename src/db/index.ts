@@ -76,6 +76,7 @@ export const createUser = async (
     gitAccount: gitAccount,
     email: email,
     admin: admin,
+    ...(oidcId ? { oidcId } : {}),
   };
 
   if (isBlank(username)) {

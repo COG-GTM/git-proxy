@@ -15,8 +15,9 @@
  */
 
 import { assignRoles, validateJwt } from './jwtUtils';
+import * as db from '../../db';
 import type { Request, Response, NextFunction } from 'express';
-import { getAPIAuthMethods } from '../../config';
+import { getAPIAuthMethods, getAuthMethods } from '../../config';
 import {
   AuthenticationElement,
   JwtConfig,
@@ -25,6 +26,21 @@ import {
 } from '../../config/generated/config';
 
 export const type = 'jwt';
+
+// Stored oidcId values are subjects issued by the UI OIDC provider. A subject is
+// only unique per issuer, so JWT subjects are matched against them only when
+// the JWT authority is exactly that same issuer string.
+const sharesIssuerWithOidcLogin = (authorityURL: string): boolean => {
+  let authMethods: AuthenticationElement[];
+  try {
+    authMethods = getAuthMethods();
+  } catch {
+    return false;
+  }
+  const oidcIssuer = authMethods.find((method) => method.type.toLowerCase() === 'openidconnect')
+    ?.oidcConfig?.issuer;
+  return !!oidcIssuer && oidcIssuer === authorityURL;
+};
 
 export const jwtAuthHandler = (overrideConfig: JwtConfig | null = null) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -92,8 +108,22 @@ export const jwtAuthHandler = (overrideConfig: JwtConfig | null = null) => {
       return;
     }
 
-    req.user = verifiedPayload;
-    assignRoles(roleMapping as RoleMapping, verifiedPayload, req.user);
+    // Build req.user from trusted sources only: identity comes from the user
+    // database (matched on the token subject, same issuer only) and roles come
+    // from roleMapping. Raw token claims such as `admin` or `username` are never
+    // copied over.
+    const sub = typeof verifiedPayload.sub === 'string' ? verifiedPayload.sub : undefined;
+    const dbUser =
+      sub && sharesIssuerWithOidcLogin(authorityURL) ? await db.findUserByOIDC(sub) : null;
+
+    const user: Record<string, unknown> = { sub, admin: false };
+    if (dbUser) {
+      user.username = dbUser.username;
+      user.email = dbUser.email;
+    }
+    assignRoles(roleMapping as RoleMapping, verifiedPayload, user);
+
+    req.user = user as Express.User;
 
     console.log('JWT validation successful\n');
     next();
