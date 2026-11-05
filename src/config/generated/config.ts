@@ -56,6 +56,12 @@ export interface GitProxyConfig {
    */
   domains?: Domains;
   /**
+   * Maximum size in bytes of a git-upload-pack or git-receive-pack request body that the
+   * proxy will buffer for inspection. Larger requests are rejected with HTTP 413 (default
+   * 104857600, i.e. 100 MiB).
+   */
+  maxPackSizeBytes?: number;
+  /**
    * List of plugins to integrate on GitProxy's push or pull actions. Each value is either a
    * file path or a module name.
    */
@@ -769,6 +775,7 @@ const typeMap: any = {
       { json: 'cookieSecret', js: 'cookieSecret', typ: u(undefined, '') },
       { json: 'csrfProtection', js: 'csrfProtection', typ: u(undefined, true) },
       { json: 'domains', js: 'domains', typ: u(undefined, r('Domains')) },
+      { json: 'maxPackSizeBytes', js: 'maxPackSizeBytes', typ: u(undefined, 3.14) },
       { json: 'plugins', js: 'plugins', typ: u(undefined, a('')) },
       { json: 'privateOrganizations', js: 'privateOrganizations', typ: u(undefined, a('any')) },
       { json: 'proxyUrl', js: 'proxyUrl', typ: u(undefined, '') },

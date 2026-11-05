@@ -261,6 +261,10 @@
       "required": ["windowMs", "limit"],
       "additionalProperties": false
     },
+    "maxPackSizeBytes": {
+      "type": "number",
+      "description": "Maximum size in bytes of a git-upload-pack or git-receive-pack request body that the proxy will buffer for inspection. Larger requests are rejected with HTTP 413 (default 104857600, i.e. 100 MiB)."
+    },
     "privateOrganizations": {
       "description": "Provider searches for listed private organizations are disabled, see commitConfig.diff.block.providers",
       "type": "array"
