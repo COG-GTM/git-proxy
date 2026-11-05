@@ -5,6 +5,7 @@
     "windowMs": 60000,
     "limit": 1000
   },
+  "trustProxy": false,
   "tempPassword": {
     "sendEmail": false,
     "emailConfig": {}

@@ -145,7 +145,7 @@ async function createApp(proxy: Proxy): Promise<Express> {
   const passport = await configure();
   const absBuildPath = path.join(__dirname, '../../build');
   app.use(cors(corsOptions));
-  app.set('trust proxy', 1);
+  app.set('trust proxy', config.getTrustProxy());
   app.use(limiter);
 
   app.use(
