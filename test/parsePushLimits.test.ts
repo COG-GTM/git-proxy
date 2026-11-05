@@ -21,7 +21,23 @@ vi.mock('../src/proxy/processors/constants', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/proxy/processors/constants')>()),
   MAX_INFLATED_OBJECT_SIZE: 1024,
   MAX_INFLATED_PACK_SIZE: 4096,
+  MAX_CONCURRENT_PACK_INFLATIONS: 1,
 }));
+
+const inflation = vi.hoisted(() => ({ inFlight: 0, maxInFlight: 0 }));
+
+vi.mock('zlib', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('zlib')>();
+  const inflate = (buf: Buffer, opts: object, cb: (err: Error | null, res: unknown) => void) => {
+    inflation.inFlight++;
+    inflation.maxInFlight = Math.max(inflation.maxInFlight, inflation.inFlight);
+    actual.inflate(buf, opts, (err, res) => {
+      inflation.inFlight--;
+      cb(err, res);
+    });
+  };
+  return { ...actual, default: { ...actual, inflate }, inflate };
+});
 
 import { getContents } from '../src/proxy/processors/push-action/parsePush';
 
@@ -89,5 +105,23 @@ describe('parsePush inflation limits', () => {
     );
 
     expect(await parsing).toBe(true);
+  });
+
+  it('inflates at most MAX_CONCURRENT_PACK_INFLATIONS packs at once', async () => {
+    inflation.maxInFlight = 0;
+    const results = await Promise.allSettled([
+      getContents(buildContents([1000, 1000, 1000]), 3),
+      getContents(buildContents([1025]), 1),
+      getContents(buildContents([500, 500]), 2),
+      getContents(buildContents([1000, 1000]), 2),
+    ]);
+
+    expect(results.map((r) => r.status)).toEqual([
+      'fulfilled',
+      'rejected',
+      'fulfilled',
+      'fulfilled',
+    ]);
+    expect(inflation.maxInFlight).toBe(1);
   });
 });

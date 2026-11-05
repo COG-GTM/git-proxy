@@ -30,6 +30,7 @@ import {
   GIT_OBJECT_TYPE_COMMIT,
   MAX_INFLATED_OBJECT_SIZE,
   MAX_INFLATED_PACK_SIZE,
+  MAX_CONCURRENT_PACK_INFLATIONS,
 } from '../constants';
 import { getErrorMessage } from '../../../utils/errors';
 
@@ -470,6 +471,27 @@ const inflateAsync = promisify(inflate) as unknown as (
   options: InflateOptions & { info: true },
 ) => Promise<{ buffer: Buffer; engine: Zlib }>;
 
+// limits how many pushes inflate at once so concurrent requests can't multiply MAX_INFLATED_PACK_SIZE
+let activeInflations = 0;
+const inflationQueue: Array<() => void> = [];
+
+const acquireInflationSlot = async (): Promise<void> => {
+  if (activeInflations < MAX_CONCURRENT_PACK_INFLATIONS) {
+    activeInflations++;
+    return;
+  }
+  await new Promise<void>((resolve) => inflationQueue.push(resolve));
+};
+
+const releaseInflationSlot = (): void => {
+  const next = inflationQueue.shift();
+  if (next) {
+    next();
+  } else {
+    activeInflations--;
+  }
+};
+
 /**
  * Decompresses the stream of headers and deflated git objects that follow
  * the 12-byte PACK file headers (which should already have been removed from
@@ -479,7 +501,8 @@ const inflateAsync = promisify(inflate) as unknown as (
  * object is capped at MAX_INFLATED_OBJECT_SIZE and the sum over all objects at
  * MAX_INFLATED_PACK_SIZE, so a decompression bomb is rejected instead of
  * exhausting memory. The number of compressed bytes consumed by zlib is used
- * to locate the start of the next object.
+ * to locate the start of the next object. At most MAX_CONCURRENT_PACK_INFLATIONS
+ * PACKs are inflated at a time; further calls wait for a free slot.
  * @param {Buffer} buffer The buffer to decompress
  * @param {number} maxEntries The number of objects declared in the PACK header.
  * Decompression stops once this many objects have been read.
@@ -490,6 +513,15 @@ const decompressGitObjects = async (
   buffer: Buffer,
   maxEntries: number = Number.MAX_SAFE_INTEGER,
 ): Promise<GitObject[]> => {
+  await acquireInflationSlot();
+  try {
+    return await inflateGitObjects(buffer, maxEntries);
+  } finally {
+    releaseInflationSlot();
+  }
+};
+
+const inflateGitObjects = async (buffer: Buffer, maxEntries: number): Promise<GitObject[]> => {
   const results: GitObject[] = [];
   let offset = 0;
   let totalInflated = 0;

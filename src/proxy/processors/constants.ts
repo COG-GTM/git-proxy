@@ -50,3 +50,5 @@ export const SAMPLE_REPO = {
     canAuthorise: ['bob'],
   },
 };
+/** Maximum number of PACK files inflated concurrently, bounding aggregate inflation memory. */
+export const MAX_CONCURRENT_PACK_INFLATIONS = 2;
