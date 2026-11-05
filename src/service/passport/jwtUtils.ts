@@ -66,9 +66,10 @@ async function fetchJwks(authorityUrl: string): Promise<JwkKey[]> {
 /**
  * Obtain the JSON Web Key Set (JWKS) from the OIDC authority.
  *
- * Keys are cached per authority for JWKS_CACHE_TTL_MS. Concurrent callers share a single
- * in-flight fetch, and outbound fetches (including forced refreshes and retries after a
- * failure) happen at most once per JWKS_MIN_REFRESH_INTERVAL_MS per authority.
+ * Keys are cached per authority for JWKS_CACHE_TTL_MS and are never served past that TTL, even
+ * if a refresh fails. Concurrent callers share a single in-flight fetch, and outbound fetches
+ * (including forced refreshes and retries after a failure) happen at most once per
+ * JWKS_MIN_REFRESH_INTERVAL_MS per authority.
  * @param {string} authorityUrl the OIDC authority URL. e.g. https://login.microsoftonline.com/{tenantId}
  * @param {boolean} forceRefresh refetch before the TTL expires (e.g. on an unknown key ID)
  * @return {Promise<JwkKey[]>} the JWKS keys
@@ -81,18 +82,19 @@ export async function getJwks(authorityUrl: string, forceRefresh = false): Promi
     jwksCache.set(authorityUrl, entry);
   }
 
+  const isFresh = (e: JwksCacheEntry) => !!e.keys && Date.now() - e.fetchedAt < JWKS_CACHE_TTL_MS;
+
+  if (isFresh(entry) && !forceRefresh) {
+    return entry.keys!;
+  }
+
   if (entry.inFlight) {
     return entry.inFlight;
   }
 
-  const fresh = entry.keys && now - entry.fetchedAt < JWKS_CACHE_TTL_MS;
-  if (fresh && !forceRefresh) {
-    return entry.keys!;
-  }
-
   if (now - entry.lastAttemptAt < JWKS_MIN_REFRESH_INTERVAL_MS) {
-    if (entry.keys) {
-      return entry.keys;
+    if (isFresh(entry)) {
+      return entry.keys!;
     }
     throw entry.lastError ?? new Error('Failed to fetch JWKS');
   }
@@ -108,8 +110,8 @@ export async function getJwks(authorityUrl: string, forceRefresh = false): Promi
     })
     .catch((error: Error) => {
       cacheEntry.lastError = error;
-      if (cacheEntry.keys) {
-        return cacheEntry.keys;
+      if (isFresh(cacheEntry)) {
+        return cacheEntry.keys!;
       }
       throw error;
     })

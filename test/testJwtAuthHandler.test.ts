@@ -152,7 +152,7 @@ describe('JWT', () => {
       expect(getStub).toHaveBeenCalledTimes(2);
     });
 
-    it('should keep serving cached keys if a refresh fails', async () => {
+    it('should keep fresh cached keys if a forced refresh fails', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       const keys = [{ kid: 'test-key', kty: 'RSA', n: 'abc', e: 'AQAB' }];
       mockJwksFetch(keys);
@@ -160,9 +160,47 @@ describe('JWT', () => {
 
       vi.restoreAllMocks();
       vi.spyOn(axios, 'get').mockRejectedValue(new Error('Network fail'));
+      vi.advanceTimersByTime(JWKS_MIN_REFRESH_INTERVAL_MS);
+
+      await expect(getJwks('https://mock.com', true)).resolves.toEqual(keys);
+      await expect(getJwks('https://mock.com')).resolves.toEqual(keys);
+    });
+
+    it('should not serve expired keys when a refresh fails', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      mockJwksFetch();
+      await getJwks('https://mock.com');
+
+      vi.restoreAllMocks();
+      const getStub = vi.spyOn(axios, 'get').mockRejectedValue(new Error('Network fail'));
       vi.advanceTimersByTime(JWKS_CACHE_TTL_MS);
 
+      await expect(getJwks('https://mock.com')).rejects.toThrow('Failed to fetch JWKS');
+      await expect(getJwks('https://mock.com')).rejects.toThrow('Failed to fetch JWKS');
+      expect(getStub).toHaveBeenCalledTimes(1);
+    });
+
+    it('should serve fresh cached keys without waiting for an in-flight forced refresh', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const keys = [{ kid: 'test-key', kty: 'RSA', n: 'abc', e: 'AQAB' }];
+      mockJwksFetch(keys);
+      await getJwks('https://mock.com');
+
+      vi.restoreAllMocks();
+      let release: () => void = () => {};
+      const pending = new Promise<void>((resolve) => (release = resolve));
+      vi.spyOn(axios, 'get').mockImplementation(async (url: string) => {
+        await pending;
+        return url.endsWith('/.well-known/openid-configuration')
+          ? { data: { jwks_uri: 'https://mock.com/jwks' } }
+          : { data: { keys } };
+      });
+      vi.advanceTimersByTime(JWKS_MIN_REFRESH_INTERVAL_MS);
+
+      const forced = getJwks('https://mock.com', true);
       await expect(getJwks('https://mock.com')).resolves.toEqual(keys);
+      release();
+      await expect(forced).resolves.toEqual(keys);
     });
   });
 
