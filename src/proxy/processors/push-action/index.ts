@@ -29,6 +29,7 @@ import { exec as checkIfWaitingAuth } from './checkIfWaitingAuth';
 import { exec as checkCommitMessages } from './checkCommitMessages';
 import { exec as checkAuthorEmails } from './checkAuthorEmails';
 import { exec as checkUserPushPermission } from './checkUserPushPermission';
+import { exec as resolvePusher } from './resolvePusher';
 
 import { exec as checkEmptyBranch } from './checkEmptyBranch';
 
@@ -47,5 +48,6 @@ export {
   checkCommitMessages,
   checkAuthorEmails,
   checkUserPushPermission,
+  resolvePusher,
   checkEmptyBranch,
 };

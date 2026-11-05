@@ -78,6 +78,12 @@ Note that invalid regex patterns will throw an error during proxy startup. These
 
 Source: [/src/proxy/processors/push-action/checkAuthorEmails.ts](/src/proxy/processors/push-action/checkAuthorEmails.ts)
 
+#### `resolvePusher`
+
+Runs right after `parsePush` (and before any push plugins). Resolves the authenticated pusher in the same way as [`checkUserPushPermission`](#checkuserpushpermission) and, if exactly one GitProxy user matches, sets `action.user` and `action.userEmail` so that plugins see a trusted identity. It never blocks the push; enforcement happens in `checkUserPushPermission`.
+
+Source: [/src/proxy/processors/push-action/resolvePusher.ts](/src/proxy/processors/push-action/resolvePusher.ts)
+
 #### `checkUserPushPermission`
 
 Authenticates the pusher from the credentials presented to the proxy (the HTTP Basic `Authorization` header sent by the git client) and checks that the matching GitProxy user is allowed to push to that specific repo. Commit metadata in the pack (e.g. the committer email) is **never** used to identify the pusher, since it is fully controlled by the client.
@@ -86,13 +92,13 @@ The pusher's SCM account is resolved as follows:
 
 - `github.com`: the token owner's `login` from `GET https://api.github.com/user`
 - GitLab hosts (hostname contains `gitlab`): the token owner's `username` from `GET <host>/api/v4/user`
-- Any other git server: the Basic auth username, which the server authenticates together with the password
+- Any other git server: the push is blocked, since the Basic auth username alone does not prove who owns the credentials
 
 The SCM account is then matched (case-insensitively) against the `gitAccount` of GitProxy users. On success, `action.user` and `action.userEmail` are set to that GitProxy user's username and email; these are what the dashboard uses to prevent a reviewer from approving or rejecting their own push.
 
 This step will fail on various scenarios such as:
 
-- The push has no valid Basic credentials, or the SCM provider cannot resolve the token owner
+- The push has no valid Basic credentials, the SCM provider cannot resolve the token owner, or the host is not GitHub/GitLab
 - The SCM account matches multiple GitProxy users
 - No GitProxy user has that SCM account as their `gitAccount`
 - The user isn't in the repo's contributor (`canPush`) or approver (`canAuthorise`) list

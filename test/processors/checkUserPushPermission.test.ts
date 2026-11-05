@@ -194,9 +194,9 @@ describe('checkUserPushPermission', () => {
       );
     });
 
-    it('should use the Basic username for git servers that authenticate it', async () => {
+    it('should block pushes to git servers whose token owner cannot be verified', async () => {
       action = new Action('1', 'push', 'POST', 1, GENERIC_URL);
-      req = { headers: { authorization: basicAuth('testuser', 'user123') } } as Request;
+      req = { headers: { authorization: basicAuth('testuser', 'attacker-token') } } as Request;
       getUsersMock.mockResolvedValue([
         { username: 'tester', email: 'tester@test.com', gitAccount: 'testuser' },
       ]);
@@ -205,9 +205,9 @@ describe('checkUserPushPermission', () => {
       const result = await exec(req, action);
 
       expect(axiosGetMock).not.toHaveBeenCalled();
-      expect(isUserPushAllowedMock).toHaveBeenCalledWith(GENERIC_URL, 'tester');
-      expect(result.steps[0].error).toBe(false);
-      expect(result.userEmail).toBe('tester@test.com');
+      expect(isUserPushAllowedMock).not.toHaveBeenCalled();
+      expect(result.steps[0].error).toBe(true);
+      expect(result.userEmail).toBeUndefined();
     });
 
     describe('fuzzing', () => {

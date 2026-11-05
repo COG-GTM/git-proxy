@@ -75,6 +75,7 @@ Action chains are a list of processors that a Git operation goes through before 
 Executed when a user makes a `git push` to GitProxy. These are the actions in `pushActionChain`, by order of execution:
 
 - [`parsePush`](./Processors.md#parsepush)
+- [`resolvePusher`](./Processors.md#resolvepusher)
 - [`checkEmptyBranch`](./Processors.md#checkemptybranch)
 - [`checkRepoInAuthorisedList`](./Processors.md#checkrepoinauthorisedlist)
 - [`checkCommitMessages`](./Processors.md#checkcommitmessages)

@@ -46,8 +46,8 @@ export const parseBasicAuth = (header?: string): BasicCredentials | null => {
  * Resolves the SCM account that owns the credentials presented to the proxy.
  *
  * GitHub and GitLab accept any username alongside a token, so the account is
- * resolved by asking the provider who the token belongs to. Other git servers
- * authenticate the username and password together, so the username is used.
+ * resolved by asking the provider who the token belongs to. The Basic username is
+ * never trusted on its own, so pushes to other git servers cannot be authenticated.
  * @param {string} url The upstream repository URL
  * @param {string | undefined} authHeader The Authorization header sent by the git client
  * @param {Step} step The step used for logging
@@ -100,5 +100,6 @@ export const getAuthenticatedGitAccount = async (
     return null;
   }
 
-  return credentials.username || null;
+  step.log(`Unable to verify the owner of the push credentials for host ${hostname}`);
+  return null;
 };

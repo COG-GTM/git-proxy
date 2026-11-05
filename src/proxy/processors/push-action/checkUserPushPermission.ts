@@ -18,6 +18,7 @@ import { Request } from 'express';
 
 import { Action, Step } from '../../actions';
 import { getUsers, isUserPushAllowed } from '../../../db';
+import { User } from '../../../db/types';
 import { getAuthenticatedGitAccount } from '../pusherIdentity';
 
 // Execute if the repo is approved
@@ -41,6 +42,14 @@ const exec = async (req: Request, action: Action): Promise<Action> => {
 };
 
 /**
+ * Finds the GitProxy users linked to an SCM account.
+ * @param {string} gitAccount The authenticated SCM account
+ * @return {Promise<User[]>} The matching users
+ */
+const findUsersByGitAccount = async (gitAccount: string): Promise<User[]> =>
+  (await getUsers()).filter((user) => user.gitAccount?.toLowerCase() === gitAccount.toLowerCase());
+
+/**
  * Helper that validates the user's push permission.
  * This can be used by other actions that need it.
  * @param {string} gitAccount The authenticated SCM account of the pusher
@@ -52,9 +61,7 @@ const validateUser = async (gitAccount: string, action: Action, step: Step): Pro
   let isUserAllowed = false;
 
   // Find the GitProxy user linked to this SCM account
-  const list = (await getUsers()).filter(
-    (user) => user.gitAccount?.toLowerCase() === gitAccount.toLowerCase(),
-  );
+  const list = await findUsersByGitAccount(gitAccount);
 
   if (list.length > 1) {
     step.error = true;
@@ -97,4 +104,4 @@ const validateUser = async (gitAccount: string, action: Action, step: Step): Pro
 
 exec.displayName = 'checkUserPushPermission.exec';
 
-export { exec, validateUser };
+export { exec, validateUser, findUsersByGitAccount };

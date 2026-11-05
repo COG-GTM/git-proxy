@@ -120,14 +120,14 @@ describe('pusherIdentity', () => {
       expect(account).toBeNull();
     });
 
-    it('uses the Basic username for other git servers', async () => {
+    it('does not trust the Basic username for other git servers', async () => {
       const account = await getAuthenticatedGitAccount(
         'https://git-server:8443/test-owner/test-repo.git',
         basicAuth('testuser:user123'),
         step,
       );
 
-      expect(account).toBe('testuser');
+      expect(account).toBeNull();
       expect(axiosGetMock).not.toHaveBeenCalled();
     });
 

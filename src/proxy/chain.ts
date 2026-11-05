@@ -24,6 +24,7 @@ import { handleErrorAndLog } from '../utils/errors';
 
 const pushActionChain: ((req: Request, action: Action) => Promise<Action>)[] = [
   proc.push.parsePush,
+  proc.push.resolvePusher,
   proc.push.checkEmptyBranch,
   proc.push.checkRepoInAuthorisedList,
   proc.push.checkCommitMessages,
@@ -111,8 +112,8 @@ export const getChain = async (
     );
     for (const pluginObj of chainPluginLoader.pushPlugins) {
       console.log(`Inserting push plugin ${pluginObj.constructor.name} into chain`);
-      // insert custom functions after parsePush but before other actions
-      pushActionChain.splice(1, 0, pluginObj.exec);
+      // insert custom functions after parsePush and resolvePusher but before other actions
+      pushActionChain.splice(2, 0, pluginObj.exec);
     }
     for (const pluginObj of chainPluginLoader.pullPlugins) {
       console.log(`Inserting pull plugin ${pluginObj.constructor.name} into chain`);

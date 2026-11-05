@@ -30,6 +30,7 @@ const mockLoader = {
 const initMockPushProcessors = () => {
   return {
     parsePush: vi.fn(),
+    resolvePusher: vi.fn(),
     checkEmptyBranch: vi.fn(),
     checkRepoInAuthorisedList: vi.fn(),
     checkCommitMessages: vi.fn(),
@@ -154,6 +155,7 @@ describe('proxy chain', function () {
     //all processors upto checkIfWaitingAuth should have run + clearBareClone & audit
     expect(mockPreProcessors.parseAction).toHaveBeenCalled();
     expect(mockPushProcessors.parsePush).toHaveBeenCalled();
+    expect(mockPushProcessors.resolvePusher).toHaveBeenCalled();
     expect(mockPushProcessors.checkEmptyBranch).toHaveBeenCalled();
     expect(mockPushProcessors.checkRepoInAuthorisedList).toHaveBeenCalled();
     expect(mockPushProcessors.checkCommitMessages).toHaveBeenCalled();
