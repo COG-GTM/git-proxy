@@ -98,6 +98,15 @@ export interface GitProxyConfig {
    */
   tls?: TLS;
   /**
+   * Express 'trust proxy' setting for the API/UI server, which determines how the client IP
+   * used for rate limiting is derived from X-Forwarded-For. Defaults to false (use the socket
+   * address). Only enable when the service is behind a trusted reverse proxy: set a hop count
+   * (e.g. 1), or a comma-separated list of trusted proxy addresses/subnets (e.g. "loopback,
+   * 10.0.0.0/8"). Setting true trusts any client-supplied X-Forwarded-For header and allows
+   * rate limits to be bypassed.
+   */
+  trustProxy?: boolean | number | string;
+  /**
    * UI routes that require authentication (logged in or admin)
    */
   uiRouteAuth?: UIRouteAuth;
@@ -779,6 +788,7 @@ const typeMap: any = {
       { json: 'sslKeyPemPath', js: 'sslKeyPemPath', typ: u(undefined, '') },
       { json: 'tempPassword', js: 'tempPassword', typ: u(undefined, r('TempPassword')) },
       { json: 'tls', js: 'tls', typ: u(undefined, r('TLS')) },
+      { json: 'trustProxy', js: 'trustProxy', typ: u(undefined, u(true, 3.14, '')) },
       { json: 'uiRouteAuth', js: 'uiRouteAuth', typ: u(undefined, r('UIRouteAuth')) },
       { json: 'urlShortener', js: 'urlShortener', typ: u(undefined, '') },
     ],

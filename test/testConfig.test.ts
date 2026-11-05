@@ -48,6 +48,7 @@ describe('default configuration', () => {
     expect(config.getCSRFProtection()).toEqual(defaultSettings.csrfProtection);
     expect(config.getAttestationConfig()).toEqual(defaultSettings.attestationConfig);
     expect(config.getAPIs()).toEqual(defaultSettings.api);
+    expect(config.getTrustProxy()).toBe(false);
   });
 });
 
@@ -163,6 +164,15 @@ describe('user configuration', () => {
 
     expect(config.getRateLimit()?.windowMs).toBe(limitConfig.rateLimit.windowMs);
     expect(config.getRateLimit()?.limit).toBe(limitConfig.rateLimit.limit);
+  });
+
+  it('should override default settings for trust proxy', async () => {
+    fs.writeFileSync(tempUserFile, JSON.stringify({ trustProxy: 'loopback, 10.0.0.0/8' }));
+
+    const config = await import('../src/config');
+    config.invalidateCache();
+
+    expect(config.getTrustProxy()).toBe('loopback, 10.0.0.0/8');
   });
 
   it('should override default settings for attestation config', async () => {

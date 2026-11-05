@@ -286,6 +286,18 @@ Switch from the default file-based database to MongoDB for production use:
 - Configure replica sets for high availability
 - Schedule regular backups of audit data (`mongodump`)
 
+### Running Behind a Reverse Proxy
+
+By default the service ignores `X-Forwarded-For` and rate-limits clients by their socket address (`"trustProxy": false`). If the UI/API is served behind a load balancer or reverse proxy, set `trustProxy` in `proxy.config.json` so rate limits apply to the real client IP:
+
+```json
+{
+  "trustProxy": 1
+}
+```
+
+Use the number of trusted proxy hops, or a comma-separated list of trusted proxy addresses/subnets (e.g. `"loopback, 10.0.0.0/8"`). Do not enable it when clients connect directly (for example, when Docker ports are published without a proxy in front), as clients could then spoof `X-Forwarded-For` to evade rate limiting.
+
 ### Health Checks
 
 GitProxy provides health check endpoints on both servers:
