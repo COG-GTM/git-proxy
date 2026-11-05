@@ -51,7 +51,7 @@
     "cli:js": "node ./packages/git-proxy-cli/dist/index.js",
     "client": "vite --config vite.config.ts",
     "clientinstall": "npm install --prefix client",
-    "server": "cross-env ALLOWED_ORIGINS=* tsx index.ts",
+    "server": "cross-env ALLOWED_ORIGINS=http://localhost:3000 tsx index.ts",
     "start": "concurrently \"npm run server\" \"npm run client\"",
     "build": "npm run generate-config-types && npm run build-ui && npm run build-ts",
     "build-ts": "tsc --project tsconfig.publish.json && node scripts/fix-shebang.js",

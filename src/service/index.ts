@@ -59,14 +59,14 @@ const getServiceTLSOptions = () => ({
  *
  * Configuration Options:
  * 1. Production (restrictive): ALLOWED_ORIGINS='https://gitproxy.company.com,https://gitproxy-staging.company.com'
- * 2. Development (permissive): ALLOWED_ORIGINS='*'
+ * 2. Development (permissive): ALLOWED_ORIGINS='*' (wildcard origin, credentials disabled)
  * 3. Local dev with Vite: ALLOWED_ORIGINS='http://localhost:3000'
  * 4. Same-origin only: Leave ALLOWED_ORIGINS unset or empty
  *
  * Examples:
  * - Single origin: ALLOWED_ORIGINS='https://example.com'
  * - Multiple origins: ALLOWED_ORIGINS='http://localhost:3000,https://example.com'
- * - All origins (testing): ALLOWED_ORIGINS='*'
+ * - All origins (testing, no cookies/credentials): ALLOWED_ORIGINS='*'
  * - Same-origin only: ALLOWED_ORIGINS='' or unset
  */
 
