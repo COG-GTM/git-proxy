@@ -496,6 +496,32 @@ describe('repo routes - edge cases', () => {
     expect(res.body.message).toBe('You are not authorised to perform this action.');
   });
 
+  it('should return 401 when unauthenticated user lists repos', async () => {
+    const res = await request(app).get('/api/v1/repo');
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Not logged in');
+    expect(Array.isArray(res.body)).toBe(false);
+  });
+
+  it('should return 401 when unauthenticated user gets a repo by id', async () => {
+    const res = await request(app).get(`/api/v1/repo/${repoId}`);
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Not logged in');
+    expect(res.body.users).toBeUndefined();
+  });
+
+  it('should allow non-admin logged-in users to list and get repos', async () => {
+    const listRes = await request(app).get('/api/v1/repo').set('Cookie', nonAdminCookie);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.some((r: { _id: string }) => r._id === repoId)).toBe(true);
+
+    const getRes = await request(app).get(`/api/v1/repo/${repoId}`).set('Cookie', nonAdminCookie);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.url).toBe(TEST_REPO.url);
+  });
+
   it('should return 400 when repo url is missing', async () => {
     const res = await request(app).post('/api/v1/repo').set('Cookie', adminCookie).send({
       name: 'no-url-repo',
