@@ -43,6 +43,9 @@ const SEVEN_BIT_MASK = 0x7f;
  * size encodings (size and ofs_delta offsets) in Git object headers used in
  * PACK files. */
 const EIGHTH_BIT_MASK = 0x80;
+/** Matches `shallow <oid>` lines that a shallow client may send before its
+ * ref update commands. These do not update any ref. */
+const SHALLOW_LINE_REGEX = /^shallow [0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 
 /**
  * Executes the parsing of a push request.
@@ -76,6 +79,24 @@ async function exec(req: Request, action: Action): Promise<Action> {
     }
 
     const [oldCommit, newCommit, ref] = parts;
+
+    if (!ref.startsWith(BRANCH_PREFIX)) {
+      step.log(`Invalid ref in branch update: ${ref}`);
+      throw new Error('Your push has been blocked. Invalid ref update format.');
+    }
+
+    const unexpectedLines = packetLines.filter(
+      (line) => line !== refUpdates[0] && !SHALLOW_LINE_REGEX.test(line.replace(/\n$/, '')),
+    );
+    if (unexpectedLines.length > 0) {
+      step.log('Push contains packet lines other than the single branch update.');
+      unexpectedLines.forEach((line) => {
+        step.log(`Unexpected packet line: ${line.split('\0')[0].trim()}`);
+      });
+      throw new Error(
+        'Your push has been blocked. Please make sure you are pushing to a single branch only, without tags or other refs.',
+      );
+    }
 
     // Strip everything after NUL, which is cap-list from
     // https://git-scm.com/docs/http-protocol#_smart_server_response
