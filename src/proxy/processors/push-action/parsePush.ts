@@ -17,7 +17,8 @@
 import { Request } from 'express';
 import fs from 'fs';
 import lod from 'lodash';
-import { createInflate } from 'zlib';
+import { promisify } from 'util';
+import { inflate, type ZlibOptions, type Zlib } from 'zlib';
 
 import { Action, Step } from '../../actions';
 import { CommitContent, CommitData, CommitHeader, PackMeta, PersonLine } from '../types';
@@ -27,6 +28,9 @@ import {
   PACK_SIGNATURE,
   PACKET_SIZE,
   GIT_OBJECT_TYPE_COMMIT,
+  MAX_INFLATED_OBJECT_SIZE,
+  MAX_INFLATED_PACK_SIZE,
+  MAX_CONCURRENT_PACK_INFLATIONS,
 } from '../constants';
 import { getErrorMessage } from '../../../utils/errors';
 
@@ -311,7 +315,7 @@ const getPackMeta = (buffer: Buffer): [PackMeta, Buffer] => {
 const getContents = async (buffer: Buffer, numEntries: number): Promise<CommitContent[]> => {
   const entries: CommitContent[] = [];
 
-  const gitObjects = await decompressGitObjects(buffer);
+  const gitObjects = await decompressGitObjects(buffer, numEntries);
   for (let index = 0; index < gitObjects.length; index++) {
     const obj = gitObjects[index];
 
@@ -326,12 +330,18 @@ const getContents = async (buffer: Buffer, numEntries: number): Promise<CommitCo
     });
   }
 
+  // log object metadata only - object contents may be up to MAX_INFLATED_PACK_SIZE bytes
+  const summary = JSON.stringify(
+    entries.map(({ content, ...rest }) => ({ ...rest, contentLength: content.length })),
+    null,
+    2,
+  );
   if (numEntries != entries.length) {
     console.warn(
-      `getContents returned an unexpected number of entries: ${entries.length}, expected ${numEntries}, entries:\n${JSON.stringify(entries, null, 2)}`,
+      `getContents returned an unexpected number of entries: ${entries.length}, expected ${numEntries}, entries:\n${summary}`,
     );
   } else {
-    console.log(`getContents returned ${numEntries} entries:\n${JSON.stringify(entries, null, 2)}`);
+    console.log(`getContents returned ${numEntries} entries:\n${summary}`);
   }
 
   return entries;
@@ -455,99 +465,119 @@ const parseGitObjectHeader = (buffer: Buffer, offset: number): GitObjectHeader =
   return header;
 };
 
+// async zlib runs on the libuv threadpool so large objects don't block the event loop
+const inflateAsync = promisify(inflate) as unknown as (
+  buf: Buffer,
+  options: ZlibOptions & { info: true },
+) => Promise<{ buffer: Buffer; engine: Zlib }>;
+
+// limits how many pushes inflate at once so concurrent requests can't multiply MAX_INFLATED_PACK_SIZE
+let activeInflations = 0;
+const inflationQueue: Array<() => void> = [];
+
+const acquireInflationSlot = async (): Promise<void> => {
+  if (activeInflations < MAX_CONCURRENT_PACK_INFLATIONS) {
+    activeInflations++;
+    return;
+  }
+  await new Promise<void>((resolve) => inflationQueue.push(resolve));
+};
+
+const releaseInflationSlot = (): void => {
+  const next = inflationQueue.shift();
+  if (next) {
+    next();
+  } else {
+    activeInflations--;
+  }
+};
+
 /**
  * Decompresses the stream of headers and deflated git objects that follow
  * the 12-byte PACK file headers (which should already have been removed from
  * the buffer before processing it with this function).
+ *
+ * Each object is inflated in a single bounded call: the inflated size of an
+ * object is capped at MAX_INFLATED_OBJECT_SIZE and the sum over all objects at
+ * MAX_INFLATED_PACK_SIZE, so a decompression bomb is rejected instead of
+ * exhausting memory. The number of compressed bytes consumed by zlib is used
+ * to locate the start of the next object. At most MAX_CONCURRENT_PACK_INFLATIONS
+ * PACKs are inflated at a time; further calls wait for a free slot.
  * @param {Buffer} buffer The buffer to decompress
+ * @param {number} maxEntries The number of objects declared in the PACK header.
+ * Decompression stops once this many objects have been read.
  * @return {Promise<GitObject[]>} A promise to return an array of GitObjects
  * representing the decompressed data.
  */
-const decompressGitObjects = async (buffer: Buffer): Promise<GitObject[]> => {
+const decompressGitObjects = async (
+  buffer: Buffer,
+  maxEntries: number = Number.MAX_SAFE_INTEGER,
+): Promise<GitObject[]> => {
+  await acquireInflationSlot();
+  try {
+    return await inflateGitObjects(buffer, maxEntries);
+  } finally {
+    releaseInflationSlot();
+  }
+};
+
+const inflateGitObjects = async (buffer: Buffer, maxEntries: number): Promise<GitObject[]> => {
   const results: GitObject[] = [];
   let offset = 0;
-  let currentWriteResolve: () => void | undefined;
-  let error: Error | null = null;
+  let totalInflated = 0;
 
   // keep going while there is more buffer to consume
   // the buffer will end with either a 20 or 32 byte checksum - we don't know which
   // but we can assume that 12 bytes will not be enough for a final object so there's
   // no point continuing if we have < 32 bytes remaining.
   // TODO: figure how many bytes we finish up with and then validate with the appropriate SHA type
-  while (offset < buffer.length - 32 && !error) {
+  while (offset < buffer.length - 32 && results.length < maxEntries) {
     const startOffset = offset;
     const header = parseGitObjectHeader(buffer, offset);
     offset += header.headerLength;
 
-    // create a new inflater for each object
-    const inflater = createInflate();
-    const chunks: Buffer[] = [];
-    let done = false;
+    const remaining = MAX_INFLATED_PACK_SIZE - totalInflated;
+    // maxOutputLength must be >= 1; an empty object is still allowed once the budget is exhausted
+    const maxOutputLength = Math.max(1, Math.min(MAX_INFLATED_OBJECT_SIZE, remaining));
+    const packLimitError = `PACK exceeds the maximum inflated size of ${MAX_INFLATED_PACK_SIZE} bytes`;
 
-    // store any data returned
-    const onData = (data: Buffer) => {
-      chunks.push(data);
-    };
-
-    // stop at the end of each stream - there is no other good way to know how many bytes to process
-    const onEnd = () => {
-      inflater.end();
-      done = true;
-    };
-
-    // stop on errors, except maybe buffer errors?
-    const onError = (e: unknown) => {
+    let inflated: Buffer;
+    let consumed: number;
+    try {
+      const result = await inflateAsync(buffer.subarray(offset), {
+        info: true,
+        maxOutputLength,
+      });
+      inflated = result.buffer;
+      consumed = result.engine.bytesWritten;
+    } catch (e: unknown) {
+      if ((e as NodeJS.ErrnoException)?.code === 'ERR_BUFFER_TOO_LARGE') {
+        const limit =
+          maxOutputLength === MAX_INFLATED_OBJECT_SIZE
+            ? `object at offset ${startOffset} exceeds the maximum inflated object size of ${MAX_INFLATED_OBJECT_SIZE} bytes`
+            : packLimitError;
+        console.warn(`Error during inflation: ${limit}`);
+        throw new Error(`Error during inflation: ${limit}`);
+      }
       const msg = getErrorMessage(e);
       console.warn(`Error during inflation: ${msg}`);
-      error = new Error(`Error during inflation: ${msg}`);
-      inflater.end();
-      done = true;
-      if (currentWriteResolve) currentWriteResolve();
-    };
-
-    inflater.on('data', onData);
-    inflater.on('end', onEnd);
-    inflater.on('error', onError);
-
-    // Feed the buffer in a byte at a time and wait for output
-    while (offset < buffer.length && !(done || error)) {
-      try {
-        await new Promise<void>((resolve, reject) => {
-          if (!done) {
-            // store the resolve function in case an error occurs as callback will never be called
-            currentWriteResolve = resolve;
-            // use the callback to throttle input such that each byte is processed before we insert the next
-            inflater.write(buffer.subarray(offset, offset + 1), () => {
-              resolve();
-            });
-            offset++;
-          }
-        });
-      } catch (e: unknown) {
-        const msg = getErrorMessage(e);
-        console.warn(`Error during decompression: ${msg}`);
-        error = new Error(`Error during decompression: ${msg}`);
-      }
+      throw new Error(`Error during inflation: ${msg}`);
     }
-    const result = {
+
+    if (inflated.length > remaining) {
+      console.warn(`Error during inflation: ${packLimitError}`);
+      throw new Error(`Error during inflation: ${packLimitError}`);
+    }
+    totalInflated += inflated.length;
+    offset += consumed;
+
+    results.push({
       header,
-      data: Buffer.concat(chunks).toString('utf-8'),
+      data: inflated.toString('utf-8'),
       offset: startOffset,
-    };
-
-    results.push(result);
-
-    // we overshoot by one byte, back-up 1 to account for it.
-    offset--;
-
-    inflater.removeAllListeners();
-    inflater.destroy();
+    });
   }
 
-  // throw any error that was caught as we were not able to read the pack file in full
-  if (error) {
-    throw error;
-  }
   return results;
 };
 

@@ -31,6 +31,7 @@ vi.mock('../src/proxy/chain', () => ({
 // Now import the module-under-test, which will receive the mocked deps
 import { extractRawBody, isPackPost } from '../src/proxy/routes';
 import * as chain from '../src/proxy/chain';
+import { MAX_PACK_BODY_SIZE } from '../src/proxy/processors/constants';
 
 describe('extractRawBody middleware', () => {
   let req: any;
@@ -73,6 +74,15 @@ describe('extractRawBody middleware', () => {
     expect(next).toHaveBeenCalledOnce();
     expect(req.bodyRaw).toBeDefined();
     expect(typeof req.pipe).toBe('function');
+  });
+
+  it('limits the buffered body to MAX_PACK_BODY_SIZE', async () => {
+    req.write('abcd');
+    req.end();
+
+    await extractRawBody(req, res, next);
+
+    expect(rawBody).toHaveBeenCalledWith(expect.anything(), { limit: MAX_PACK_BODY_SIZE });
   });
 });
 

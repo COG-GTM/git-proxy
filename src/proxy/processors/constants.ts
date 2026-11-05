@@ -23,6 +23,13 @@ export const PACK_SIGNATURE = 'PACK';
 export const PACKET_SIZE = 4;
 export const GIT_OBJECT_TYPE_COMMIT = 1;
 
+/** Maximum size of a git-upload-pack / git-receive-pack request body buffered by the proxy. */
+export const MAX_PACK_BODY_SIZE = '100000kb';
+/** Maximum inflated size of a single object in a PACK file (matches GitHub's 100 MiB file limit). */
+export const MAX_INFLATED_OBJECT_SIZE = 100 * 1024 * 1024;
+/** Maximum combined inflated size of all objects in a PACK file. */
+export const MAX_INFLATED_PACK_SIZE = 256 * 1024 * 1024;
+
 export const SAMPLE_COMMIT: CommitData = {
   tree: '1234567890',
   parent: '0000000000000000000000000000000000000000',
@@ -43,3 +50,5 @@ export const SAMPLE_REPO = {
     canAuthorise: ['bob'],
   },
 };
+/** Maximum number of PACK files inflated concurrently, bounding aggregate inflation memory. */
+export const MAX_CONCURRENT_PACK_INFLATIONS = 2;
