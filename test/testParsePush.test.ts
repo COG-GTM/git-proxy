@@ -447,6 +447,88 @@ describe('parsePackFile', () => {
       expect(step.logs[1]).toContain('Expected 1, but got 2');
     });
 
+    it('should add error step if a tag update is pushed alongside the branch update', async () => {
+      const packetLines = [
+        `${'a'.repeat(40)} ${'b'.repeat(40)} refs/heads/main\0caps\n`,
+        `${EMPTY_COMMIT_HASH} ${'c'.repeat(40)} refs/tags/x\n`,
+      ];
+      req.body = Buffer.concat([createPacketLineBuffer(packetLines), createSamplePackBuffer()]);
+      const result = await exec(req, action);
+
+      expect(result).toBe(action);
+      const step = action.steps[0];
+      expect(step.stepName).toBe('parsePackFile');
+      expect(step.error).toBe(true);
+      expect(step.errorMessage).toContain('pushing to a single branch only');
+      expect(step.errorMessage).toContain('without tags or other refs');
+      expect(step.logs).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Push contains packet lines other than the single branch update'),
+          expect.stringContaining(
+            `Unexpected packet line: ${EMPTY_COMMIT_HASH} ${'c'.repeat(40)} refs/tags/x`,
+          ),
+        ]),
+      );
+      expect(action.commitData).toEqual([]);
+    });
+
+    it('should add error step if a tag update is pushed before the branch update', async () => {
+      const packetLines = [
+        `${EMPTY_COMMIT_HASH} ${'c'.repeat(40)} refs/tags/x\0caps\n`,
+        `${'a'.repeat(40)} ${'b'.repeat(40)} refs/heads/main\n`,
+      ];
+      req.body = Buffer.concat([createPacketLineBuffer(packetLines), createSamplePackBuffer()]);
+      await exec(req, action);
+
+      const step = action.steps[0];
+      expect(step.error).toBe(true);
+      expect(step.errorMessage).toContain('without tags or other refs');
+    });
+
+    it('should add error step if a non-branch ref (refs/notes) is pushed alongside the branch update', async () => {
+      const packetLines = [
+        `${'a'.repeat(40)} ${'b'.repeat(40)} refs/heads/main\0caps\n`,
+        `${EMPTY_COMMIT_HASH} ${'d'.repeat(40)} refs/notes/commits\n`,
+      ];
+      req.body = Buffer.concat([createPacketLineBuffer(packetLines), createSamplePackBuffer()]);
+      await exec(req, action);
+
+      const step = action.steps[0];
+      expect(step.error).toBe(true);
+      expect(step.errorMessage).toContain('without tags or other refs');
+    });
+
+    it('should add error step if the only ref update merely contains refs/heads/ but is not a branch', async () => {
+      const ref = 'refs/tags/refs/heads/main';
+      const packetLines = [`${EMPTY_COMMIT_HASH} ${'c'.repeat(40)} ${ref}\0caps\n`];
+      req.body = Buffer.concat([createPacketLineBuffer(packetLines), createSamplePackBuffer()]);
+      await exec(req, action);
+
+      const step = action.steps[0];
+      expect(step.error).toBe(true);
+      expect(step.errorMessage).toContain('Invalid ref update format');
+      expect(step.logs[0]).toContain(`Invalid ref in branch update: ${ref}`);
+      expect(action.branch).not.toBe(ref);
+    });
+
+    it('should allow shallow lines alongside the single branch update', async () => {
+      const oldCommit = 'a'.repeat(40);
+      const newCommit = 'b'.repeat(40);
+      const ref = 'refs/heads/main';
+      const packetLines = [
+        `shallow ${'e'.repeat(40)}\n`,
+        `${oldCommit} ${newCommit} ${ref}\0caps\n`,
+      ];
+      req.body = createPacketLineBuffer(packetLines);
+      await exec(req, action);
+
+      const step = action.steps[0];
+      expect(step.error).toBe(true);
+      expect(step.errorMessage).toContain('PACK data is missing');
+      expect(action.branch).toBe(ref);
+      expect(action.setCommit).toHaveBeenCalledWith(oldCommit, newCommit);
+    });
+
     it('should add error step if extra part in ref update', async () => {
       const packetLines = ['oldhash1 newhash1 extra-part refs/heads/main\0caps\n'];
       req.body = createPacketLineBuffer(packetLines);
@@ -849,8 +931,7 @@ describe('parsePackFile', () => {
       const newCommit = 'b'.repeat(40);
       const ref = 'refs/heads/develop';
       const packetLines = [
-        `${oldCommit} ${newCommit} ${ref}\0capa\n`,
-        'some other data containing PACK keyword', // Include "PACK" within a packet line's content
+        `${oldCommit} ${newCommit} ${ref}\0capa agent=PACK-client\n`, // Include "PACK" within a packet line's content
       ];
 
       const commitContent =
