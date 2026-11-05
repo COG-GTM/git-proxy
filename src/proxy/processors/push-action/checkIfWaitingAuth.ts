@@ -20,6 +20,12 @@ import { Action, Step } from '../../actions';
 import { getPush } from '../../../db';
 import { getErrorMessage } from '../../../utils/errors';
 
+const isSamePushTarget = (existing: Action, current: Action): boolean =>
+  existing.url === current.url &&
+  existing.branch === current.branch &&
+  existing.commitFrom === current.commitFrom &&
+  existing.commitTo === current.commitTo;
+
 // Execute function
 const exec = async (_req: Request, action: Action): Promise<Action> => {
   const step = new Step('checkIfWaitingAuth');
@@ -27,7 +33,7 @@ const exec = async (_req: Request, action: Action): Promise<Action> => {
     const existingAction = await getPush(action.id);
     if (existingAction) {
       if (!action.error) {
-        if (existingAction.authorised) {
+        if (existingAction.authorised && isSamePushTarget(existingAction, action)) {
           action = existingAction;
           action.setAllowPush();
         }

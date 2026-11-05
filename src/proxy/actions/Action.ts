@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import { createHash } from 'crypto';
+
 import { processGitURLForNameAndOrg, processUrlPath } from '../routes/helper';
 import { Step } from './Step';
 import { CompletedAttestation, CommitData, Rejection } from '../processors/types';
@@ -112,22 +114,34 @@ class Action {
 
   /**
    * Set the commit range for the action. Changes the action.id to be based on
-   * the commit details.
+   * the commit details, the target repository URL and the target branch, so
+   * that an approval for one repository/branch cannot be reused for another.
    * @param {string} commitFrom the starting commit
    * @param {string} commitTo the ending commit
    */
   setCommit(commitFrom: string, commitTo: string): void {
     this.commitFrom = commitFrom;
     this.commitTo = commitTo;
-    this.id = `${commitFrom}__${commitTo}`;
+    this.updatePushId();
   }
 
   /**
-   * Set the branch for the action.
+   * Set the branch for the action. Updates the action.id if the commit range
+   * has already been set.
    * @param {string} branch the branch
    */
   setBranch(branch: string): void {
     this.branch = branch;
+    if (this.commitFrom !== undefined && this.commitTo !== undefined) {
+      this.updatePushId();
+    }
+  }
+
+  private updatePushId(): void {
+    const target = createHash('sha256')
+      .update(`${this.url}\n${this.branch ?? ''}`)
+      .digest('hex');
+    this.id = `${this.commitFrom}__${this.commitTo}__${target}`;
   }
 
   /**

@@ -111,6 +111,74 @@ describe('checkIfWaitingAuth', () => {
       expect(result.error).toBe(true);
     });
 
+    it('should not set allowPush when the approved push targeted a different repository', async () => {
+      const commitFrom = 'a'.repeat(40);
+      const commitTo = 'b'.repeat(40);
+      action = new Action('1', 'push', 'POST', 1, 'https://github.com/acme/payments.git');
+      action.branch = 'refs/heads/main';
+      action.setCommit(commitFrom, commitTo);
+
+      const approvedElsewhere = new Action(
+        '2',
+        'push',
+        'POST',
+        2,
+        'https://github.com/acme/sandbox.git',
+      );
+      approvedElsewhere.branch = 'refs/heads/main';
+      approvedElsewhere.setCommit(commitFrom, commitTo);
+      approvedElsewhere.id = action.id;
+      approvedElsewhere.authorised = true;
+      getPushMock.mockResolvedValue(approvedElsewhere);
+
+      const result = await checkIfWaitingAuthModule.exec(req, action);
+
+      expect(result.allowPush).toBe(false);
+      expect(result.url).toBe('https://github.com/acme/payments.git');
+      expect(result.authorised).toBe(false);
+    });
+
+    it('should not set allowPush when the approved push targeted a different branch', async () => {
+      const commitFrom = 'a'.repeat(40);
+      const commitTo = 'b'.repeat(40);
+      const url = 'https://github.com/acme/payments.git';
+      action = new Action('1', 'push', 'POST', 1, url);
+      action.branch = 'refs/heads/main';
+      action.setCommit(commitFrom, commitTo);
+
+      const approvedElsewhere = new Action('2', 'push', 'POST', 2, url);
+      approvedElsewhere.branch = 'refs/heads/feature';
+      approvedElsewhere.setCommit(commitFrom, commitTo);
+      approvedElsewhere.id = action.id;
+      approvedElsewhere.authorised = true;
+      getPushMock.mockResolvedValue(approvedElsewhere);
+
+      const result = await checkIfWaitingAuthModule.exec(req, action);
+
+      expect(result.allowPush).toBe(false);
+      expect(result.branch).toBe('refs/heads/main');
+    });
+
+    it('should set allowPush when the approved push targeted the same repository and branch', async () => {
+      const commitFrom = 'a'.repeat(40);
+      const commitTo = 'b'.repeat(40);
+      const url = 'https://github.com/acme/payments.git';
+      action = new Action('1', 'push', 'POST', 1, url);
+      action.branch = 'refs/heads/main';
+      action.setCommit(commitFrom, commitTo);
+
+      const approved = new Action('2', 'push', 'POST', 2, url);
+      approved.branch = 'refs/heads/main';
+      approved.setCommit(commitFrom, commitTo);
+      approved.authorised = true;
+      getPushMock.mockResolvedValue(approved);
+
+      const result = await checkIfWaitingAuthModule.exec(req, action);
+
+      expect(getPushMock).toHaveBeenCalledWith(action.id);
+      expect(result.allowPush).toBe(true);
+    });
+
     it('should add step with error when getPush throws', async () => {
       const error = new Error('DB error');
       getPushMock.mockRejectedValue(error);
