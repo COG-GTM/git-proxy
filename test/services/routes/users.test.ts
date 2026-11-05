@@ -22,11 +22,20 @@ import * as db from '../../../src/db';
 
 describe('Users API', () => {
   let app: Express;
+  let anonApp: Express;
 
   beforeEach(() => {
     app = express();
     app.use(express.json());
+    app.use((req, _res, next) => {
+      req.user = { username: 'carol', admin: false };
+      next();
+    });
     app.use('/users', usersRouter);
+
+    anonApp = express();
+    anonApp.use(express.json());
+    anonApp.use('/users', usersRouter);
 
     vi.spyOn(db, 'getUsers').mockResolvedValue([
       {
@@ -90,5 +99,21 @@ describe('Users API', () => {
     const res = await request(app).get('/users/non-existent');
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ message: 'User non-existent not found' });
+  });
+
+  it('GET /users should return 401 when not logged in', async () => {
+    const res = await request(anonApp).get('/users');
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ message: 'Not logged in' });
+    expect(db.getUsers).not.toHaveBeenCalled();
+  });
+
+  it('GET /users/:id should return 401 when not logged in', async () => {
+    const res = await request(anonApp).get('/users/bob');
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ message: 'Not logged in' });
+    expect(db.findUser).not.toHaveBeenCalled();
   });
 });

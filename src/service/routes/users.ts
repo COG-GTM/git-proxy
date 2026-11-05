@@ -14,11 +14,19 @@
  * limitations under the License.
  */
 
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 const router = express.Router();
 
 import * as db from '../../db';
 import { toPublicUser } from './utils';
+
+router.use((req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    res.status(401).send({ message: 'Not logged in' });
+    return;
+  }
+  next();
+});
 
 router.get('/', async (req: Request, res: Response) => {
   console.log('fetching users');
