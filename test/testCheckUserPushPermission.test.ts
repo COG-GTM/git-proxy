@@ -14,8 +14,16 @@
  * limitations under the License.
  */
 
-import { describe, it, beforeAll, afterAll, expect } from 'vitest';
+import { describe, it, beforeAll, afterAll, expect, vi } from 'vitest';
 import { Request } from 'express';
+
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(async (_url: string, config: { headers: { Authorization: string } }) => ({
+      data: { login: config.headers.Authorization.replace('Bearer token-for-', '') },
+    })),
+  },
+}));
 import * as processor from '../src/proxy/processors/push-action/checkUserPushPermission';
 import { Action } from '../src/proxy/actions/Action';
 import * as db from '../src/db';
@@ -27,10 +35,15 @@ const TEST_USERNAME_1 = 'push-perms-test';
 const TEST_EMAIL_1 = 'push-perms-test@test.com';
 const TEST_USERNAME_2 = 'push-perms-test-2';
 const TEST_EMAIL_2 = 'push-perms-test-2@test.com';
-const TEST_EMAIL_3 = 'push-perms-test-3@test.com';
+
+const reqAs = (gitAccount: string) =>
+  ({
+    headers: {
+      authorization: `Basic ${Buffer.from(`ignored:token-for-${gitAccount}`).toString('base64')}`,
+    },
+  }) as Request;
 
 describe('checkUserPushPermission', () => {
-  const req = {} as Request;
   let testRepo: Required<db.Repo> | null = null;
 
   beforeAll(async () => {
@@ -51,26 +64,38 @@ describe('checkUserPushPermission', () => {
     await db.deleteUser(TEST_USERNAME_2);
   });
 
-  it('allows pushes from an approved committer', async () => {
+  it('allows pushes from an approved pusher', async () => {
+    const action = new Action('1', 'type', 'method', 1, TEST_URL);
+    const { error, user, userEmail } = await processor.exec(reqAs(TEST_USERNAME_1), action);
+    expect(error).toBe(false);
+    expect(user).toBe(TEST_USERNAME_1);
+    expect(userEmail).toBe(TEST_EMAIL_1);
+  });
+
+  it('blocks pushes from an unapproved pusher', async () => {
+    const action = new Action('1', 'type', 'method', 1, TEST_URL);
+    const { error, errorMessage } = await processor.exec(reqAs(TEST_USERNAME_2), action);
+    expect(error).toBe(true);
+    expect(errorMessage).toContain('Your push has been blocked');
+  });
+
+  it('blocks pushes from an unknown pusher', async () => {
+    const action = new Action('1', 'type', 'method', 1, TEST_URL);
+    const { error, errorMessage } = await processor.exec(reqAs('unknown-account'), action);
+    expect(error).toBe(true);
+    expect(errorMessage).toContain('Your push has been blocked');
+  });
+
+  it('blocks an unapproved pusher who forges an approved committer email', async () => {
     const action = new Action('1', 'type', 'method', 1, TEST_URL);
     action.userEmail = TEST_EMAIL_1;
-    const { error } = await processor.exec(req, action);
-    expect(error).toBe(false);
-  });
-
-  it('blocks pushes from an unapproved committer', async () => {
-    const action = new Action('1', 'type', 'method', 1, TEST_URL);
-    action.userEmail = TEST_EMAIL_2;
-    const { error, errorMessage } = await processor.exec(req, action);
+    const { error, errorMessage, user, userEmail } = await processor.exec(
+      reqAs(TEST_USERNAME_2),
+      action,
+    );
     expect(error).toBe(true);
-    expect(errorMessage).toContain('Your push has been blocked');
-  });
-
-  it('blocks pushes from an unknown committer', async () => {
-    const action = new Action('1', 'type', 'method', 1, TEST_URL);
-    action.userEmail = TEST_EMAIL_3;
-    const { error, errorMessage } = await processor.exec(req, action);
-    expect(error).toBe(true);
-    expect(errorMessage).toContain('Your push has been blocked');
+    expect(errorMessage).toContain(`${TEST_USERNAME_2} is not allowed to push`);
+    expect(user).toBe(TEST_USERNAME_2);
+    expect(userEmail).toBe(TEST_EMAIL_2);
   });
 });

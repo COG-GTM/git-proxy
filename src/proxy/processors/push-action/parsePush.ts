@@ -109,12 +109,11 @@ async function exec(req: Request, action: Action): Promise<Action> {
         action.commitFrom = action.commitData[action.commitData.length - 1].parent;
       }
 
-      const { committer, committerEmail } = action.commitData[action.commitData.length - 1];
-      // Note: This is not always the pusher's email, it's the last committer's email.
+      // The committer is self-asserted by the client and must not be used as the pusher's
+      // identity; checkUserPushPermission sets action.user from the push credentials.
       // See https://github.com/finos/git-proxy/issues/1400
-      step.log(`Push request received from user ${committer} with email ${committerEmail}`);
-      action.user = committer;
-      action.userEmail = committerEmail;
+      const { committer, committerEmail } = action.commitData[action.commitData.length - 1];
+      step.log(`Push contains commits last committed by ${committer} <${committerEmail}>`);
     }
 
     step.content = {

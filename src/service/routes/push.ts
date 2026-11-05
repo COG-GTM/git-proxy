@@ -83,13 +83,13 @@ router.post('/:id/reject', async (req: Request<{ id: string }>, res: Response) =
   const push = await getValidPushOrRespond(id, res);
   if (!push) return;
 
-  // Get the committer of the push via their email
-  const committerEmail = push.userEmail;
-  const list = await db.getUsers({ email: committerEmail });
+  // Get the pusher (authenticated by checkUserPushPermission) via their email
+  const pusherEmail = push.userEmail;
+  const list = await db.getUsers({ email: pusherEmail });
 
   if (list.length === 0) {
     res.status(404).send({
-      message: `No user found with the committer's email address: ${committerEmail}`,
+      message: `No user found with the pusher's email address: ${pusherEmail}`,
     });
     return;
   }
@@ -168,14 +168,14 @@ router.post(
       return;
     }
 
-    // Get the committer of the push via their email address
-    const committerEmail = push.userEmail;
+    // Get the pusher (authenticated by checkUserPushPermission) via their email address
+    const pusherEmail = push.userEmail;
 
-    const list = await db.getUsers({ email: committerEmail });
+    const list = await db.getUsers({ email: pusherEmail });
 
     if (list.length === 0) {
       res.status(404).send({
-        message: `No user found with the committer's email address: ${committerEmail}`,
+        message: `No user found with the pusher's email address: ${pusherEmail}`,
       });
       return;
     }

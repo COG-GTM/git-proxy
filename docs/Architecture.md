@@ -53,7 +53,7 @@ Don't forget to save and update the attached .drawio (XML)! -->
 Three types of policies can be applied to incoming pushes:
 
 - Default policies: These are already present in the GitProxy pull/push chain and require modifying source code to change their behaviour.
-  - For example, [`checkUserPushPermission`](./Processors.md#checkuserpushpermission) which simply checks if the pusher's email exists in the GitProxy database, and if their user is marked in the "Contributors" list (`canPush`) for the repository they're trying to push to.
+  - For example, [`checkUserPushPermission`](./Processors.md#checkuserpushpermission) which authenticates the pusher from their git credentials, checks that they map to a GitProxy user (via `gitAccount`), and if their user is marked in the "Contributors" list (`canPush`) for the repository they're trying to push to.
 - Configurable policies: These are policies that can be easily configured through the GitProxy config (`proxy.config.json` or a custom file).
   - For example, [`checkCommitMessages`](./Processors.md#checkcommitmessages) which reads the configuration and matches the string patterns provided with the commit messages in the push in order to block it.
 - Custom policies:
@@ -75,6 +75,7 @@ Action chains are a list of processors that a Git operation goes through before 
 Executed when a user makes a `git push` to GitProxy. These are the actions in `pushActionChain`, by order of execution:
 
 - [`parsePush`](./Processors.md#parsepush)
+- [`resolvePusher`](./Processors.md#resolvepusher)
 - [`checkEmptyBranch`](./Processors.md#checkemptybranch)
 - [`checkRepoInAuthorisedList`](./Processors.md#checkrepoinauthorisedlist)
 - [`checkCommitMessages`](./Processors.md#checkcommitmessages)
@@ -343,6 +344,14 @@ Sample values:
 This will limit the number of **requests made to the API** to 150 per minute.
 
 Optionally, a `statusCode` and a `message` can be specified to override the default responses.
+
+#### `basicAuthHosts`
+
+Hostnames (optionally with port) of self-hosted git servers that verify the Basic auth username and password themselves, such as servers backed by htpasswd or LDAP. For pushes to these hosts, GitProxy checks that the server rejects anonymous `git-receive-pack` discovery and accepts it with the push credentials, and then identifies the pusher by the Basic auth username, which must match a GitProxy user's `gitAccount`. This setting takes precedence over the GitHub/GitLab API lookup for the listed hosts. Pushes to hosts that are neither GitHub, GitLab nor listed here are blocked. Never list a server that accepts any username alongside a token.
+
+```json
+"basicAuthHosts": ["git.internal.example.com"]
+```
 
 #### `privateOrganizations` (deprecated)
 
