@@ -19,8 +19,11 @@ import proxy from 'express-http-proxy';
 import { PassThrough } from 'stream';
 import getRawBody from 'raw-body';
 import { executeChain } from '../chain';
+import { exec as parseAction } from '../processors/pre-processor/parseAction';
+import { exec as checkRepoInAuthorisedList } from '../processors/push-action/checkRepoInAuthorisedList';
+import { exec as audit } from '../processors/post-processor/audit';
 import { processUrlPath, validGitRequest } from './helper';
-import { getAllProxiedHosts, getRepoByUrl } from '../../db';
+import { getAllProxiedHosts } from '../../db';
 import { getMaxPackSizeBytes } from '../../config';
 import { ProxyOptions } from 'express-http-proxy';
 import { handleErrorAndLog } from '../../utils/errors';
@@ -163,18 +166,6 @@ const isPackPost = (req: Request) =>
   req.method === 'POST' &&
   /^(?:\/[^/]+)*\/[^/]+\.git\/(?:git-upload-pack|git-receive-pack)$/.test(req.url);
 
-const isRegisteredRepo = async (requestPath: string): Promise<boolean> => {
-  const repoPath = processUrlPath(requestPath)?.repoPath;
-  if (!repoPath) {
-    return false;
-  }
-  // mirrors the URL resolution in parseAction, including the legacy github.com fallback
-  return (
-    (await getRepoByUrl('https:/' + repoPath)) !== null ||
-    (await getRepoByUrl('https://github.com' + repoPath)) !== null
-  );
-};
-
 const rejectPackPost = (req: Request, res: Response, message: string): void => {
   logAction(req.url, req.headers.host, req.headers['user-agent'], ActionType.ERROR, message);
   sendErrorResponse(req, res, message);
@@ -203,8 +194,15 @@ const extractRawBody = async (req: Request, res: Response, next: NextFunction) =
   }
 
   try {
-    if (!(await isRegisteredRepo(req.originalUrl ?? req.url))) {
-      return rejectPackPost(req, res, 'Rejecting repo not in the authorised whitelist');
+    const action = await checkRepoInAuthorisedList(req, await parseAction(req));
+    if (!action.continue()) {
+      // keep the audit record the action chain would have written, without reading the body
+      await audit(req, action);
+      return rejectPackPost(
+        req,
+        res,
+        action.errorMessage ?? 'Rejecting repo not in the authorised whitelist',
+      );
     }
   } catch (error: unknown) {
     const message = handleErrorAndLog(error, 'Error checking repository authorisation');

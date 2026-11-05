@@ -30,6 +30,7 @@ vi.mock('../src/proxy/chain', () => ({
 
 vi.mock('../src/db', () => ({
   getRepoByUrl: vi.fn(),
+  writeAudit: vi.fn(),
   getAllProxiedHosts: vi.fn().mockResolvedValue([]),
 }));
 
@@ -51,6 +52,7 @@ describe('extractRawBody middleware', () => {
     (rawBody as Mock).mockClear();
     (chain.executeChain as Mock).mockClear();
     (db.getRepoByUrl as Mock).mockReset();
+    (db.writeAudit as Mock).mockClear();
     (db.getRepoByUrl as Mock).mockImplementation(async (url: string) =>
       url === 'https://github.com/proj/foo.git' ? { url } : null,
     );
@@ -138,8 +140,10 @@ describe('extractRawBody middleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('rejects a pack POST for an unregistered repository before reading the body', async () => {
+  it('rejects and audits a push to an unregistered repository before reading the body', async () => {
     req.url = req.originalUrl = '/github.com/evil/unknown.git/git-receive-pack';
+    req.headers.accept = 'application/x-git-receive-pack-result';
+    req.headers['content-type'] = 'application/x-git-receive-pack-request';
 
     await extractRawBody(req, res, next);
 
@@ -148,6 +152,23 @@ describe('extractRawBody middleware', () => {
     expect(req.pipe).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining('not in the authorised'));
+    expect(db.writeAudit).toHaveBeenCalledOnce();
+    const audited = (db.writeAudit as Mock).mock.calls[0][0];
+    expect(audited.type).toBe('push');
+    expect(audited.error).toBe(true);
+    expect(audited.url).toContain('/evil/unknown.git');
+  });
+
+  it('rejects a pull from an unregistered repository without auditing it', async () => {
+    req.url = req.originalUrl = '/github.com/evil/unknown.git/git-upload-pack';
+    req.headers['content-type'] = 'application/x-git-upload-pack-request';
+
+    await extractRawBody(req, res, next);
+
+    expect(rawBody).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('not in the authorised'));
+    expect(db.writeAudit).not.toHaveBeenCalled();
   });
 
   it('rejects with 413 when Content-Length exceeds the limit before reading the body', async () => {
