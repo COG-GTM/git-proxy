@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { IVerifyOptions, Strategy as LocalStrategy } from 'passport-local';
 import type { PassportStatic } from 'passport';
 import * as db from '../../db';
+import { serverConfig } from '../../config/env';
 
 export const type = 'local';
 
@@ -70,23 +72,58 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
   return passport;
 };
 
+const KNOWN_DEFAULT_CREDENTIALS: ReadonlyArray<[string, string]> = [
+  ['admin', 'admin'],
+  ['user', 'user'],
+];
+
 /**
- * Create the default admin and regular test users.
+ * Warn at startup while an account seeded by older releases still accepts its
+ * well-known default password (e.g. admin/admin), so operators rotate it via
+ * `POST /api/auth/change-password`.
+ */
+const warnOnKnownDefaultPasswords = async () => {
+  for (const [username, password] of KNOWN_DEFAULT_CREDENTIALS) {
+    const user = await db.findUser(username);
+    if (user?.password && (await bcrypt.compare(password, user.password))) {
+      console.warn(
+        `WARNING: the '${username}' account still uses its well-known default ` +
+          `password. Change it immediately with POST /api/auth/change-password ` +
+          `or delete the account.`,
+      );
+    }
+  }
+};
+
+/**
+ * Bootstrap the default admin account.
+ *
+ * The admin password is sourced from the `GIT_PROXY_ADMIN_PASSWORD` environment
+ * variable when set. Otherwise a cryptographically-random password is generated
+ * and logged once, on first creation only, so it never ships a guessable
+ * default. The account is only created when it does not already exist, so
+ * restarts never reset or duplicate it.
  */
 export const createDefaultAdmin = async () => {
-  const createIfNotExists = async (
-    username: string,
-    password: string,
-    email: string,
-    type: string,
-    isAdmin: boolean,
-  ) => {
-    const user = await db.findUser(username);
-    if (!user) {
-      await db.createUser(username, password, email, type, isAdmin);
-    }
-  };
+  await warnOnKnownDefaultPasswords();
 
-  await createIfNotExists('admin', 'admin', 'admin@place.com', 'none', true);
-  await createIfNotExists('user', 'user', 'user@place.com', 'none', false);
+  const existing = await db.findUser('admin');
+  if (existing) {
+    return;
+  }
+
+  const envPassword = serverConfig.GIT_PROXY_ADMIN_PASSWORD;
+  const generated = !envPassword;
+  const password = envPassword || crypto.randomBytes(24).toString('base64url');
+
+  await db.createUser('admin', password, 'admin@place.com', 'none', true);
+
+  if (generated) {
+    console.warn(
+      `WARNING: GIT_PROXY_ADMIN_PASSWORD is not set. A random password was ` +
+        `generated for the default 'admin' account:\n\n  ${password}\n\n` +
+        `Store it securely and change it after first login. Set ` +
+        `GIT_PROXY_ADMIN_PASSWORD to control this password.`,
+    );
+  }
 };

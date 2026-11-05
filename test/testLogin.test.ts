@@ -264,6 +264,77 @@ describe('login', () => {
     });
   });
 
+  describe('test change password', () => {
+    const username = 'pwchange-user';
+    const originalPassword = 'pwchange-original-pass';
+    const newPassword = 'pwchange-new-password-123';
+
+    const loginAs = async (password: string) =>
+      request(app).post('/api/auth/login').send({ username, password });
+
+    const cookieFrom = (res: request.Response): string => {
+      let cookie = '';
+      (res.headers['set-cookie'] as unknown as string[]).forEach((x: string) => {
+        if (x.startsWith('connect')) {
+          cookie = x.split(';')[0];
+        }
+      });
+      return cookie;
+    };
+
+    beforeEach(async () => {
+      await db.deleteUser(username);
+      await db.createUser(username, originalPassword, 'pwchange@test.com', username, false);
+    });
+
+    afterAll(async () => {
+      await db.deleteUser(username);
+    });
+
+    it('should reject a password change when not logged in', async () => {
+      const res = await request(app)
+        .post('/api/auth/change-password')
+        .send({ currentPassword: originalPassword, newPassword });
+      expect(res.status).toBe(401);
+    });
+
+    it('should reject a password change with a wrong current password', async () => {
+      const cookie = cookieFrom(await loginAs(originalPassword));
+      const res = await request(app)
+        .post('/api/auth/change-password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: 'not-the-password', newPassword });
+      expect(res.status).toBe(401);
+      expect((await loginAs(originalPassword)).status).toBe(200);
+    });
+
+    it('should reject missing fields and too-short or unchanged passwords', async () => {
+      const cookie = cookieFrom(await loginAs(originalPassword));
+      const send = (body: object) =>
+        request(app).post('/api/auth/change-password').set('Cookie', cookie).send(body);
+
+      expect((await send({ newPassword })).status).toBe(400);
+      expect((await send({ currentPassword: originalPassword, newPassword: 'short' })).status).toBe(
+        400,
+      );
+      expect(
+        (await send({ currentPassword: originalPassword, newPassword: originalPassword })).status,
+      ).toBe(400);
+    });
+
+    it('should change the password so only the new one works', async () => {
+      const cookie = cookieFrom(await loginAs(originalPassword));
+      const res = await request(app)
+        .post('/api/auth/change-password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: originalPassword, newPassword });
+      expect(res.status).toBe(200);
+
+      expect((await loginAs(originalPassword)).status).toBe(401);
+      expect((await loginAs(newPassword)).status).toBe(200);
+    });
+  });
+
   afterAll(async () => {
     await Service.stop();
   });

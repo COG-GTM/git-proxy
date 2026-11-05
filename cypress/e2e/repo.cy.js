@@ -18,9 +18,23 @@ describe('Repo', () => {
   let cookies;
   let repoName;
 
+  const regularUser = {
+    username: 'regular-user',
+    password: 'regular-user-pass',
+    email: 'regular-user@place.com',
+  };
+
   before(() => {
     cy.login('admin', 'admin');
     cy.cleanupTestRepos();
+    // The default user/user account no longer exists; create a regular
+    // (non-admin) user to exercise the regular-user permission checks.
+    cy.createUser(
+      regularUser.username,
+      regularUser.password,
+      regularUser.email,
+      regularUser.username,
+    );
     cy.logout();
   });
 
@@ -38,7 +52,7 @@ describe('Repo', () => {
 
   describe('Regular users', () => {
     beforeEach(() => {
-      cy.login('user', 'user');
+      cy.login(regularUser.username, regularUser.password);
 
       cy.visit('/dashboard/repo');
     });
