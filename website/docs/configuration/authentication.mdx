@@ -110,6 +110,8 @@ In other words, your JWT token provider can define an arbitrary `claim` that can
 
 Note that if the `expectedAudience` is missing, it will be set to the client ID.
 
+Roles are granted **only** through `roleMapping`: an `admin` (or any other role) claim inside the token is ignored, and the user has `admin: false` unless a mapping matches. Likewise, the GitProxy identity (`username`, `email`) is never read from token claims; it is resolved from the GitProxy user whose `oidcId` matches the token's `sub` claim. Tokens whose `sub` is not linked to a GitProxy user can still use admin-mapped endpoints, but cannot approve, reject or cancel pushes.
+
 ### Adding your own methods
 
 You can add new UI auth methods by extending the [passport.js configuration file](https://github.com/finos/git-proxy/blob/main/src/service/passport/local.js) with your desired method. You'll have to define a module and then add it to the `authStrategies` map: 

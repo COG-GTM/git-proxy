@@ -16,13 +16,17 @@
 
 import axios from 'axios';
 import crypto from 'crypto';
-import { NextFunction } from 'express';
+import express, { NextFunction } from 'express';
+import request from 'supertest';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 
 import { assignRoles, getJwks, validateJwt } from '../src/service/passport/jwtUtils';
 import { jwtAuthHandler } from '../src/service/passport/jwtAuthHandler';
 import { JwtConfig, RoleMapping } from '../src/config/generated/config';
+import * as db from '../src/db';
+import pushRouter from '../src/service/routes/push';
+import { isAdminUser } from '../src/service/routes/utils';
 
 function generateRsaKeyPair() {
   return crypto.generateKeyPairSync('rsa', {
@@ -264,6 +268,109 @@ describe('JWT', () => {
 
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.send).toHaveBeenCalledWith(expect.stringMatching(/Invalid JWT:/));
+    });
+
+    describe('req.user construction', () => {
+      const { privateKey, publicKey } = generateRsaKeyPair();
+      const jwk = publicKeyToJwk(publicKey, 'test-kid');
+
+      const signToken = (payload: Record<string, unknown>) =>
+        jwt.sign(payload, privateKey, {
+          algorithm: 'RS256',
+          issuer: jwtConfig.authorityURL!,
+          audience: jwtConfig.expectedAudience!,
+          keyid: 'test-kid',
+        });
+
+      const forgedPayload = {
+        azp: 'client-id',
+        sub: 'mallory-sub',
+        admin: true,
+        username: 'approver',
+        email: 'approver@example.com',
+      };
+
+      beforeEach(() => {
+        vi.spyOn(axios, 'get').mockImplementation(async (url: string) =>
+          url.endsWith('/.well-known/openid-configuration')
+            ? { data: { jwks_uri: 'https://mock.com/jwks' } }
+            : { data: { keys: [jwk] } },
+        );
+      });
+
+      it('should not trust admin or username claims from the token', async () => {
+        req.header.mockReturnValue(`Bearer ${signToken(forgedPayload)}`);
+        vi.spyOn(db, 'findUserByOIDC').mockResolvedValue(null);
+
+        await jwtAuthHandler(jwtConfig)(req, res, next);
+
+        expect(next).toHaveBeenCalledOnce();
+        expect(req.user.admin).toBe(false);
+        expect(req.user.username).toBeUndefined();
+        expect(req.user.email).toBeUndefined();
+        expect(isAdminUser(req.user)).toBe(false);
+      });
+
+      it('should resolve username and email from the user database by subject', async () => {
+        req.header.mockReturnValue(`Bearer ${signToken(forgedPayload)}`);
+        const findSpy = vi.spyOn(db, 'findUserByOIDC').mockResolvedValue({
+          username: 'mallory',
+          email: 'mallory@example.com',
+          admin: false,
+        } as any);
+
+        await jwtAuthHandler(jwtConfig)(req, res, next);
+
+        expect(findSpy).toHaveBeenCalledWith('mallory-sub');
+        expect(req.user).toEqual({
+          sub: 'mallory-sub',
+          admin: false,
+          username: 'mallory',
+          email: 'mallory@example.com',
+        });
+      });
+
+      it('should grant admin only through roleMapping', async () => {
+        req.header.mockReturnValue(
+          `Bearer ${signToken({ azp: 'client-id', sub: 'ci-bot', admin: 'admin' })}`,
+        );
+        vi.spyOn(db, 'findUserByOIDC').mockResolvedValue(null);
+
+        await jwtAuthHandler(jwtConfig)(req, res, next);
+
+        expect(req.user.admin).toBe(true);
+        expect(isAdminUser(req.user)).toBe(true);
+      });
+
+      it('should return 403 when a forged token tries to authorise a push', async () => {
+        vi.spyOn(db, 'findUserByOIDC').mockResolvedValue(null);
+        const canApproveSpy = vi.spyOn(db, 'canUserApproveRejectPush').mockResolvedValue(true);
+        const authoriseSpy = vi.spyOn(db, 'authorise');
+
+        const app = express();
+        app.use(express.json());
+        app.use(jwtAuthHandler(jwtConfig));
+        app.use('/api/v1/push', pushRouter);
+
+        const response = await request(app)
+          .post('/api/v1/push/some-push-id/authorise')
+          .set('Authorization', `Bearer ${signToken(forgedPayload)}`)
+          .send({
+            params: {
+              attestation: [
+                {
+                  label: 'I am happy for this to be pushed to the upstream repository',
+                  tooltip: { text: 'tooltip', links: [] },
+                  checked: true,
+                },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(403);
+        expect(canApproveSpy).not.toHaveBeenCalled();
+        expect(authoriseSpy).not.toHaveBeenCalled();
+      });
     });
   });
 });

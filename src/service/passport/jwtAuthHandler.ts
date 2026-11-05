@@ -15,6 +15,7 @@
  */
 
 import { assignRoles, validateJwt } from './jwtUtils';
+import * as db from '../../db';
 import type { Request, Response, NextFunction } from 'express';
 import { getAPIAuthMethods } from '../../config';
 import {
@@ -92,8 +93,20 @@ export const jwtAuthHandler = (overrideConfig: JwtConfig | null = null) => {
       return;
     }
 
-    req.user = verifiedPayload;
-    assignRoles(roleMapping as RoleMapping, verifiedPayload, req.user);
+    // Build req.user from trusted sources only: identity comes from the user
+    // database (matched on the token subject) and roles come from roleMapping.
+    // Raw token claims such as `admin` or `username` are never copied over.
+    const sub = typeof verifiedPayload.sub === 'string' ? verifiedPayload.sub : undefined;
+    const dbUser = sub ? await db.findUserByOIDC(sub) : null;
+
+    const user: Record<string, unknown> = { sub, admin: false };
+    if (dbUser) {
+      user.username = dbUser.username;
+      user.email = dbUser.email;
+    }
+    assignRoles(roleMapping as RoleMapping, verifiedPayload, user);
+
+    req.user = user as Express.User;
 
     console.log('JWT validation successful\n');
     next();

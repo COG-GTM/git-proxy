@@ -69,7 +69,13 @@ router.post('/:id/reject', async (req: Request<{ id: string }>, res: Response) =
   }
 
   const id = req.params.id;
-  const { username } = req.user as { username: string };
+  const { username } = req.user as { username?: string };
+  if (!username) {
+    res.status(403).send({
+      message: 'User is not linked to a GitProxy account',
+    });
+    return;
+  }
   const { reason } = req.body;
 
   if (!reason || !reason.trim()) {
@@ -158,7 +164,13 @@ router.post(
 
     const id = req.params.id;
 
-    const { username } = req.user as { username: string };
+    const { username } = req.user as { username?: string };
+    if (!username) {
+      res.status(403).send({
+        message: 'User is not linked to a GitProxy account',
+      });
+      return;
+    }
 
     const push = await db.getPush(id);
     if (!push) {
@@ -230,7 +242,13 @@ router.post('/:id/cancel', async (req: Request<{ id: string }>, res: Response) =
   }
 
   const id = req.params.id;
-  const { username } = req.user as { username: string };
+  const { username } = req.user as { username?: string };
+  if (!username) {
+    res.status(403).send({
+      message: 'User is not linked to a GitProxy account',
+    });
+    return;
+  }
 
   const isAllowed = await db.canUserCancelPush(id, username);
 
