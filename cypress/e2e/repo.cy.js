@@ -37,8 +37,14 @@ describe('Repo', () => {
   });
 
   describe('Regular users', () => {
+    before(() => {
+      cy.login('admin', 'admin');
+      cy.createUser('user', 'user1234', 'user@place.com', 'user');
+      cy.logout();
+    });
+
     beforeEach(() => {
-      cy.login('user', 'user');
+      cy.login('user', 'user1234');
 
       cy.visit('/dashboard/repo');
     });

@@ -18,6 +18,8 @@ services:
       - git-network
     environment:
       - NODE_ENV=test
+      # Test-only initial admin password. Never use a fixed password in production.
+      - GIT_PROXY_ADMIN_PASSWORD=admin
       - CONFIG_FILE=/app/test-e2e.proxy.config.json
       - GIT_PROXY_UI_PORT=8081
       - GIT_PROXY_SERVER_PORT=8000

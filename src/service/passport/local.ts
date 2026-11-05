@@ -15,6 +15,7 @@
  */
 
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { IVerifyOptions, Strategy as LocalStrategy } from 'passport-local';
 import type { PassportStatic } from 'passport';
 import * as db from '../../db';
@@ -70,23 +71,61 @@ export const configure = async (passport: PassportStatic): Promise<PassportStati
   return passport;
 };
 
+export const ADMIN_PASSWORD_ENV_VAR = 'GIT_PROXY_ADMIN_PASSWORD';
+
+const DEFAULT_ADMIN_USERNAME = 'admin';
+const DEFAULT_ADMIN_EMAIL = 'admin@place.com';
+
+// Credentials seeded by older versions of GitProxy. Warn loudly if any are still usable.
+const LEGACY_DEFAULT_CREDENTIALS = [
+  { username: 'admin', password: 'admin' },
+  { username: 'user', password: 'user' },
+];
+
+const generatePassword = (): string => crypto.randomBytes(18).toString('base64url');
+
+const warnOnLegacyDefaultCredentials = async () => {
+  for (const { username, password } of LEGACY_DEFAULT_CREDENTIALS) {
+    const user = await db.findUser(username);
+    if (user?.password && (await bcrypt.compare(password, user.password))) {
+      console.warn(
+        `WARNING: user "${username}" still has the well-known default password. ` +
+          'Change it immediately via POST /api/auth/change-password or delete the account.',
+      );
+    }
+  }
+};
+
 /**
- * Create the default admin and regular test users.
+ * Bootstrap the initial admin user on first start.
+ *
+ * The password is taken from the GIT_PROXY_ADMIN_PASSWORD environment variable if set,
+ * otherwise a random password is generated and printed once to the log.
  */
 export const createDefaultAdmin = async () => {
-  const createIfNotExists = async (
-    username: string,
-    password: string,
-    email: string,
-    type: string,
-    isAdmin: boolean,
-  ) => {
-    const user = await db.findUser(username);
-    if (!user) {
-      await db.createUser(username, password, email, type, isAdmin);
-    }
-  };
+  const existingAdmin = await db.findUser(DEFAULT_ADMIN_USERNAME);
+  if (!existingAdmin) {
+    const envPassword = process.env[ADMIN_PASSWORD_ENV_VAR];
+    const password = envPassword || generatePassword();
+    await db.createUser(DEFAULT_ADMIN_USERNAME, password, DEFAULT_ADMIN_EMAIL, 'none', true);
 
-  await createIfNotExists('admin', 'admin', 'admin@place.com', 'none', true);
-  await createIfNotExists('user', 'user', 'user@place.com', 'none', false);
+    if (envPassword) {
+      console.log(
+        `Created initial admin user "${DEFAULT_ADMIN_USERNAME}" with the password from ${ADMIN_PASSWORD_ENV_VAR}.`,
+      );
+    } else {
+      console.log(
+        [
+          '========================================================================',
+          `Created initial admin user "${DEFAULT_ADMIN_USERNAME}" with a generated password:`,
+          `  ${password}`,
+          'This password will not be shown again. Change it after first login via',
+          'POST /api/auth/change-password.',
+          '========================================================================',
+        ].join('\n'),
+      );
+    }
+  }
+
+  await warnOnLegacyDefaultCredentials();
 };

@@ -16,6 +16,7 @@
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 import express, { Express, Request, Response } from 'express';
 import authRoutes from '../../../src/service/routes/auth';
 import * as db from '../../../src/db';
@@ -301,6 +302,10 @@ describe('Auth API', () => {
           action: 'post',
           uri: '/api/auth/logout',
         },
+        changePassword: {
+          action: 'post',
+          uri: '/api/auth/change-password',
+        },
       });
     });
   });
@@ -313,6 +318,104 @@ describe('Auth API', () => {
         usernamePasswordMethod: 'local',
         otherMethods: [],
       });
+    });
+  });
+  describe('POST /change-password', () => {
+    let hash: string;
+    let updateUserSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(async () => {
+      hash = await bcrypt.hash('old-password', 4);
+      vi.spyOn(db, 'findUser').mockImplementation(async (username: string) => {
+        if (username === 'alice') {
+          return {
+            username: 'alice',
+            gitAccount: 'alice',
+            email: 'alice@example.com',
+            admin: false,
+            password: hash,
+          };
+        }
+        if (username === 'oidc-user') {
+          return {
+            username: 'oidc-user',
+            gitAccount: 'oidc',
+            email: 'oidc@example.com',
+            admin: false,
+            password: null,
+          };
+        }
+        return null;
+      });
+      updateUserSpy = vi.spyOn(db, 'updateUser').mockResolvedValue(undefined);
+    });
+
+    it('should return 401 if not logged in', async () => {
+      const res = await request(newApp())
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password' });
+      expect(res.status).toBe(401);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 if fields are missing', async () => {
+      const res = await request(newApp('alice'))
+        .post('/auth/change-password')
+        .send({ newPassword: 'new-password' });
+      expect(res.status).toBe(400);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 if the new password is too short', async () => {
+      const res = await request(newApp('alice'))
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'short' });
+      expect(res.status).toBe(400);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 if the new password exceeds the bcrypt 72-byte limit', async () => {
+      const res = await request(newApp('alice'))
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'a'.repeat(73) });
+      expect(res.status).toBe(400);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return 403 if the current password is wrong', async () => {
+      const res = await request(newApp('alice'))
+        .post('/auth/change-password')
+        .send({ currentPassword: 'wrong-password', newPassword: 'new-password' });
+      expect(res.status).toBe(403);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for users without a local password', async () => {
+      const res = await request(newApp('oidc-user'))
+        .post('/auth/change-password')
+        .send({ currentPassword: '', newPassword: 'new-password' });
+      expect(res.status).toBe(400);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 if the new password equals the current one', async () => {
+      const res = await request(newApp('alice'))
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'old-password' });
+      expect(res.status).toBe(400);
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it('should store a bcrypt hash of the new password', async () => {
+      const res = await request(newApp('alice'))
+        .post('/auth/change-password')
+        .send({ currentPassword: 'old-password', newPassword: 'new-password' });
+      expect(res.status).toBe(200);
+      expect(updateUserSpy).toHaveBeenCalledTimes(1);
+      const updated = updateUserSpy.mock.calls[0][0] as { username: string; password: string };
+      expect(updated.username).toBe('alice');
+      expect(updated.password).not.toBe('new-password');
+      expect(await bcrypt.compare('new-password', updated.password)).toBe(true);
     });
   });
 });

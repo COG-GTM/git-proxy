@@ -122,10 +122,9 @@ Currently, three different authentication methods are provided for interacting w
 
 Default username/password auth method. Note that this authentication method does not allow adding users directly from the UI (`/api/auth/create-user` must be used instead).
 
-Default accounts are provided for testing:
+On first start, GitProxy creates a single admin account with username `admin`. Its password is read from the `GIT_PROXY_ADMIN_PASSWORD` environment variable if set; otherwise a random password is generated and printed once to the server log. No other accounts are created.
 
-- Admin: Username: `admin`, Password: `admin`
-- User: Username: `user`, Password: `user`
+Users can change their own password with `POST /api/auth/change-password` (body: `{"currentPassword": "...", "newPassword": "..."}`, minimum 8 characters). A warning is logged at startup if the `admin` or `user` accounts still have the well-known default passwords seeded by older versions.
 
 #### ActiveDirectory
 
