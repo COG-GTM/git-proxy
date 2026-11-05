@@ -25,6 +25,7 @@ import { assignRoles, getJwks, validateJwt } from '../src/service/passport/jwtUt
 import { jwtAuthHandler } from '../src/service/passport/jwtAuthHandler';
 import { JwtConfig, RoleMapping } from '../src/config/generated/config';
 import * as db from '../src/db';
+import * as config from '../src/config';
 import pushRouter from '../src/service/routes/push';
 import { isAdminUser } from '../src/service/routes/utils';
 
@@ -296,6 +297,13 @@ describe('JWT', () => {
             ? { data: { jwks_uri: 'https://mock.com/jwks' } }
             : { data: { keys: [jwk] } },
         );
+        vi.spyOn(config, 'getAuthMethods').mockReturnValue([
+          {
+            type: 'openidconnect',
+            enabled: true,
+            oidcConfig: { issuer: `${jwtConfig.authorityURL}/` },
+          } as any,
+        ]);
       });
 
       it('should not trust admin or username claims from the token', async () => {
@@ -328,6 +336,41 @@ describe('JWT', () => {
           username: 'mallory',
           email: 'mallory@example.com',
         });
+      });
+
+      it('should not link identity when the JWT issuer differs from the OIDC login issuer', async () => {
+        vi.spyOn(config, 'getAuthMethods').mockReturnValue([
+          {
+            type: 'openidconnect',
+            enabled: true,
+            oidcConfig: { issuer: 'https://other-idp.example.com' },
+          } as any,
+        ]);
+        req.header.mockReturnValue(`Bearer ${signToken(forgedPayload)}`);
+        const findSpy = vi.spyOn(db, 'findUserByOIDC').mockResolvedValue({
+          username: 'victim',
+          email: 'victim@example.com',
+          admin: false,
+        } as any);
+
+        await jwtAuthHandler(jwtConfig)(req, res, next);
+
+        expect(findSpy).not.toHaveBeenCalled();
+        expect(req.user.username).toBeUndefined();
+        expect(req.user.email).toBeUndefined();
+      });
+
+      it('should not link identity when no OIDC login is configured', async () => {
+        vi.spyOn(config, 'getAuthMethods').mockReturnValue([
+          { type: 'local', enabled: true } as any,
+        ]);
+        req.header.mockReturnValue(`Bearer ${signToken(forgedPayload)}`);
+        const findSpy = vi.spyOn(db, 'findUserByOIDC');
+
+        await jwtAuthHandler(jwtConfig)(req, res, next);
+
+        expect(findSpy).not.toHaveBeenCalled();
+        expect(req.user.username).toBeUndefined();
       });
 
       it('should grant admin only through roleMapping', async () => {

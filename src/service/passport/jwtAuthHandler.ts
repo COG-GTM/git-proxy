@@ -17,7 +17,7 @@
 import { assignRoles, validateJwt } from './jwtUtils';
 import * as db from '../../db';
 import type { Request, Response, NextFunction } from 'express';
-import { getAPIAuthMethods } from '../../config';
+import { getAPIAuthMethods, getAuthMethods } from '../../config';
 import {
   AuthenticationElement,
   JwtConfig,
@@ -26,6 +26,23 @@ import {
 } from '../../config/generated/config';
 
 export const type = 'jwt';
+
+const normalizeIssuer = (issuer: string) => issuer.replace(/\/+$/, '');
+
+// Stored oidcId values are subjects issued by the UI OIDC provider. A subject is
+// only unique per issuer, so JWT subjects are matched against them only when
+// the JWT authority is that same issuer.
+const sharesIssuerWithOidcLogin = (authorityURL: string): boolean => {
+  let authMethods: AuthenticationElement[];
+  try {
+    authMethods = getAuthMethods();
+  } catch {
+    return false;
+  }
+  const oidcIssuer = authMethods.find((method) => method.type.toLowerCase() === 'openidconnect')
+    ?.oidcConfig?.issuer;
+  return !!oidcIssuer && normalizeIssuer(oidcIssuer) === normalizeIssuer(authorityURL);
+};
 
 export const jwtAuthHandler = (overrideConfig: JwtConfig | null = null) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -94,10 +111,12 @@ export const jwtAuthHandler = (overrideConfig: JwtConfig | null = null) => {
     }
 
     // Build req.user from trusted sources only: identity comes from the user
-    // database (matched on the token subject) and roles come from roleMapping.
-    // Raw token claims such as `admin` or `username` are never copied over.
+    // database (matched on the token subject, same issuer only) and roles come
+    // from roleMapping. Raw token claims such as `admin` or `username` are never
+    // copied over.
     const sub = typeof verifiedPayload.sub === 'string' ? verifiedPayload.sub : undefined;
-    const dbUser = sub ? await db.findUserByOIDC(sub) : null;
+    const dbUser =
+      sub && sharesIssuerWithOidcLogin(authorityURL) ? await db.findUserByOIDC(sub) : null;
 
     const user: Record<string, unknown> = { sub, admin: false };
     if (dbUser) {
