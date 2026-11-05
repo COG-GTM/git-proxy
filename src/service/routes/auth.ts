@@ -31,6 +31,11 @@ import { handleErrorAndLog } from '../../utils/errors';
 const router = express.Router();
 const passport = getPassport();
 
+const GIT_ACCOUNT_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+
+const isValidGitAccount = (gitAccount: unknown): gitAccount is string =>
+  typeof gitAccount === 'string' && GIT_ACCOUNT_PATTERN.test(gitAccount);
+
 const { GIT_PROXY_UI_HOST: uiHost = 'http://localhost', GIT_PROXY_UI_PORT: uiPort = 3000 } =
   process.env;
 
@@ -221,7 +226,18 @@ router.post('/gitAccount', async (req: Request, res: Response) => {
       return;
     }
 
-    user.gitAccount = req.body.gitAccount;
+    const { gitAccount } = req.body;
+    if (!isValidGitAccount(gitAccount)) {
+      res
+        .status(400)
+        .send({
+          message: 'Invalid gitAccount. Git account not updated',
+        })
+        .end();
+      return;
+    }
+
+    user.gitAccount = gitAccount;
     db.updateUser(user);
     res.status(200).end();
   } catch (error: unknown) {

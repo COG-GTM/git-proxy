@@ -83,7 +83,7 @@ describe('Auth API', () => {
 
     it('should return 400 Bad Request if username is missing', async () => {
       const res = await request(newApp('alice')).post('/auth/gitAccount').send({
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(400);
@@ -92,7 +92,7 @@ describe('Auth API', () => {
     it('should return 400 Bad Request if username is undefined', async () => {
       const res = await request(newApp('alice')).post('/auth/gitAccount').send({
         username: undefined,
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(400);
@@ -101,7 +101,7 @@ describe('Auth API', () => {
     it('should return 400 Bad Request if username is null', async () => {
       const res = await request(newApp('alice')).post('/auth/gitAccount').send({
         username: null,
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(400);
@@ -110,7 +110,7 @@ describe('Auth API', () => {
     it('should return 400 Bad Request if username is an empty string', async () => {
       const res = await request(newApp('alice')).post('/auth/gitAccount').send({
         username: '',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(400);
@@ -119,7 +119,7 @@ describe('Auth API', () => {
     it('should return 403 Forbidden if user is not an admin', async () => {
       const res = await request(newApp('bob')).post('/auth/gitAccount').send({
         username: 'alice',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(403);
@@ -128,7 +128,7 @@ describe('Auth API', () => {
     it('should return 404 Not Found if user is not found', async () => {
       const res = await request(newApp('alice')).post('/auth/gitAccount').send({
         username: 'non-existent-user',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(404);
@@ -139,7 +139,7 @@ describe('Auth API', () => {
 
       const res = await request(newApp('alice')).post('/auth/gitAccount').send({
         username: 'alice',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(200);
@@ -147,7 +147,7 @@ describe('Auth API', () => {
       expect(updateUserSpy).toHaveBeenCalledWith({
         username: 'alice',
         displayName: 'Alice Munro',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
         email: 'alice@example.com',
         admin: true,
         password: '',
@@ -155,12 +155,53 @@ describe('Auth API', () => {
       });
     });
 
+    it.each([
+      ['an object', { a: 1 }],
+      ['an array', ['bob']],
+      ['a number', 123],
+      ['a boolean', true],
+      ['null', null],
+      ['missing', undefined],
+      ['an empty string', ''],
+      ['an over-long string', 'a'.repeat(40)],
+      ['a string with invalid characters', '<img src=x onerror=alert(1)>'],
+      ['a string with a leading hyphen', '-bob'],
+      ['a string with a trailing hyphen', 'bob-'],
+      ['a string with consecutive hyphens', 'bo--b'],
+    ])('should return 400 Bad Request if gitAccount is %s', async (_label, gitAccount) => {
+      const updateUserSpy = vi.spyOn(db, 'updateUser').mockResolvedValue();
+
+      const res = await request(newApp('bob')).post('/auth/gitAccount').send({
+        username: 'bob',
+        gitAccount,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ message: 'Invalid gitAccount. Git account not updated' });
+      expect(updateUserSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(['a', 'bob', 'Bob-Woodward', 'a1-b2-c3', 'a'.repeat(39)])(
+      'should accept valid gitAccount %s',
+      async (gitAccount) => {
+        const updateUserSpy = vi.spyOn(db, 'updateUser').mockResolvedValue();
+
+        const res = await request(newApp('bob')).post('/auth/gitAccount').send({
+          username: 'bob',
+          gitAccount,
+        });
+
+        expect(res.status).toBe(200);
+        expect(updateUserSpy).toHaveBeenCalledWith(expect.objectContaining({ gitAccount }));
+      },
+    );
+
     it("should prevent non-admin users from changing a different user's gitAccount", async () => {
       const updateUserSpy = vi.spyOn(db, 'updateUser').mockResolvedValue();
 
       const res = await request(newApp('bob')).post('/auth/gitAccount').send({
         username: 'phil',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(403);
@@ -172,7 +213,7 @@ describe('Auth API', () => {
 
       const res = await request(newApp('alice')).post('/auth/gitAccount').send({
         username: 'bob',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(200);
@@ -182,7 +223,7 @@ describe('Auth API', () => {
         displayName: 'Bob Woodward',
         email: 'bob@example.com',
         admin: false,
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
         password: '',
         title: '',
       });
@@ -193,7 +234,7 @@ describe('Auth API', () => {
 
       const res = await request(newApp('bob')).post('/auth/gitAccount').send({
         username: 'bob',
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
       });
 
       expect(res.status).toBe(200);
@@ -203,7 +244,7 @@ describe('Auth API', () => {
         displayName: 'Bob Woodward',
         email: 'bob@example.com',
         admin: false,
-        gitAccount: 'UPDATED_GIT_ACCOUNT',
+        gitAccount: 'updated-git-account',
         password: '',
         title: '',
       });
