@@ -20,7 +20,8 @@ import { PassThrough } from 'stream';
 import getRawBody from 'raw-body';
 import { executeChain } from '../chain';
 import { processUrlPath, validGitRequest } from './helper';
-import { getAllProxiedHosts } from '../../db';
+import { getAllProxiedHosts, getRepoByUrl } from '../../db';
+import { getMaxPackSizeBytes } from '../../config';
 import { ProxyOptions } from 'express-http-proxy';
 import { handleErrorAndLog } from '../../utils/errors';
 
@@ -162,34 +163,78 @@ const isPackPost = (req: Request) =>
   req.method === 'POST' &&
   /^(?:\/[^/]+)*\/[^/]+\.git\/(?:git-upload-pack|git-receive-pack)$/.test(req.url);
 
+const isRegisteredRepo = async (requestPath: string): Promise<boolean> => {
+  const repoPath = processUrlPath(requestPath)?.repoPath;
+  if (!repoPath) {
+    return false;
+  }
+  // mirrors the URL resolution in parseAction, including the legacy github.com fallback
+  return (
+    (await getRepoByUrl('https:/' + repoPath)) !== null ||
+    (await getRepoByUrl('https://github.com' + repoPath)) !== null
+  );
+};
+
+const rejectPackPost = (req: Request, res: Response, message: string): void => {
+  logAction(req.url, req.headers.host, req.headers['user-agent'], ActionType.ERROR, message);
+  sendErrorResponse(req, res, message);
+};
+
+const rejectTooLarge = (req: Request, res: Response, limit: number): void => {
+  const message = `Request body exceeds the maximum pack size of ${limit} bytes`;
+  logAction(req.url, req.headers.host, req.headers['user-agent'], ActionType.ERROR, message);
+  res.set('connection', 'close');
+  res.status(413).end(message);
+};
+
 const extractRawBody = async (req: Request, res: Response, next: NextFunction) => {
   if (!isPackPost(req)) {
     return next();
   }
 
-  const proxyStream = new PassThrough({
-    highWaterMark: 4 * 1024 * 1024,
-  });
-  const pluginStream = new PassThrough({
-    highWaterMark: 4 * 1024 * 1024,
-  });
-
-  req.pipe(proxyStream);
-  req.pipe(pluginStream);
+  // run the cheap checks before reading any of the body into memory
+  const urlComponents = processUrlPath(req.url);
+  if (
+    !urlComponents ||
+    urlComponents.gitPath === undefined ||
+    !validGitRequest(urlComponents.gitPath, req.headers)
+  ) {
+    return rejectPackPost(req, res, 'Invalid request received');
+  }
 
   try {
-    const buf = await getRawBody(pluginStream, { limit: '1gb' });
+    if (!(await isRegisteredRepo(req.originalUrl ?? req.url))) {
+      return rejectPackPost(req, res, 'Rejecting repo not in the authorised whitelist');
+    }
+  } catch (error: unknown) {
+    const message = handleErrorAndLog(error, 'Error checking repository authorisation');
+    return rejectPackPost(req, res, message);
+  }
+
+  const limit = getMaxPackSizeBytes();
+  const contentLength = Number(req.headers['content-length']);
+  if (Number.isFinite(contentLength) && contentLength > limit) {
+    return rejectTooLarge(req, res, limit);
+  }
+
+  try {
+    // read straight from the request so backpressure only depends on this reader; the
+    // buffered body is replayed to the upstream proxy once the plugins have inspected it
+    const buf = await getRawBody(req, { limit });
     req.bodyRaw = buf;
-    req.pipe = (dest, opts) => proxyStream.pipe(dest, opts);
+    req.pipe = (dest, opts) => {
+      const replay = new PassThrough();
+      replay.end(buf);
+      return replay.pipe(dest, opts);
+    };
     next();
   } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error(error.message);
-      proxyStream.destroy(error);
-    } else {
-      console.error(String(error));
-      proxyStream.destroy(new Error(String(error)));
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error(err.message);
+    if ((err as { type?: string }).type === 'entity.too.large') {
+      return rejectTooLarge(req, res, limit);
     }
+    res.set('connection', 'close');
     res.status(500).end('Proxy error');
   }
 };

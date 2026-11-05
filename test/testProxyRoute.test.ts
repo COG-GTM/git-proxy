@@ -241,6 +241,31 @@ describe('proxy express application', () => {
     expect(res2.text).toContain('Rejecting repo');
   }, 5000);
 
+  it('should reject a pack POST with a non-git User-Agent without forwarding it', async () => {
+    const res = await request(proxy.getExpressApp()!)
+      .post(`${TEST_DEFAULT_REPO.proxyUrlPrefix}/git-receive-pack`)
+      .set('user-agent', 'curl/8.0')
+      .set('accept', 'application/x-git-receive-pack-result')
+      .set('content-type', 'application/x-git-receive-pack-request')
+      .send(Buffer.alloc(64 * 1024));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.connection).toBe('close');
+    expect(res.text).toContain('Invalid request received');
+  });
+
+  it('should reject a pack POST for an unregistered repository', async () => {
+    const res = await request(proxy.getExpressApp()!)
+      .post(`${TEST_UNKNOWN_REPO.proxyUrlPrefix}/git-receive-pack`)
+      .set('user-agent', 'git/2.42.0')
+      .set('accept', 'application/x-git-receive-pack-result')
+      .set('content-type', 'application/x-git-receive-pack-request')
+      .send(Buffer.alloc(64 * 1024));
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Rejecting repo');
+  });
+
   it('should create the default repo if it does not exist', async function () {
     // Remove the default repo from the db and check it no longer exists
     await cleanupRepo(TEST_DEFAULT_REPO.url);

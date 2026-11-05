@@ -28,9 +28,19 @@ vi.mock('../src/proxy/chain', () => ({
   executeChain: vi.fn(),
 }));
 
+vi.mock('../src/db', () => ({
+  getRepoByUrl: vi.fn(),
+  getAllProxiedHosts: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../src/config', () => ({
+  getMaxPackSizeBytes: vi.fn().mockReturnValue(1024),
+}));
+
 // Now import the module-under-test, which will receive the mocked deps
 import { extractRawBody, isPackPost } from '../src/proxy/routes';
 import * as chain from '../src/proxy/chain';
+import * as db from '../src/db';
 
 describe('extractRawBody middleware', () => {
   let req: any;
@@ -40,10 +50,20 @@ describe('extractRawBody middleware', () => {
   beforeEach(() => {
     (rawBody as Mock).mockClear();
     (chain.executeChain as Mock).mockClear();
+    (db.getRepoByUrl as Mock).mockReset();
+    (db.getRepoByUrl as Mock).mockImplementation(async (url: string) =>
+      url === 'https://github.com/proj/foo.git' ? { url } : null,
+    );
 
     req = new PassThrough();
     req.method = 'POST';
     req.url = '/proj/foo.git/git-upload-pack';
+    req.originalUrl = req.url;
+    req.headers = {
+      'user-agent': 'git/2.43.0',
+      accept: 'application/x-git-upload-pack-result',
+    };
+    req.pipe = vi.fn(PassThrough.prototype.pipe);
 
     res = {
       set: vi.fn().mockReturnThis(),
@@ -73,6 +93,86 @@ describe('extractRawBody middleware', () => {
     expect(next).toHaveBeenCalledOnce();
     expect(req.bodyRaw).toBeDefined();
     expect(typeof req.pipe).toBe('function');
+  });
+
+  it('replays the buffered body when the request is piped to the upstream proxy', async () => {
+    req.end();
+    await extractRawBody(req, res, next);
+
+    const upstream = new PassThrough();
+    const chunks: Buffer[] = [];
+    upstream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    await new Promise<void>((resolve) => {
+      upstream.on('end', resolve);
+      req.pipe(upstream);
+    });
+
+    expect(Buffer.concat(chunks).toString()).toBe('payload');
+  });
+
+  it('buffers with the configured pack size limit', async () => {
+    req.end();
+    await extractRawBody(req, res, next);
+    expect((rawBody as Mock).mock.calls[0][1]).toEqual({ limit: 1024 });
+  });
+
+  it('rejects a pack POST with a non-git User-Agent before reading the body', async () => {
+    req.headers['user-agent'] = 'curl/8.0';
+
+    await extractRawBody(req, res, next);
+
+    expect(rawBody).not.toHaveBeenCalled();
+    expect(req.pipe).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    expect(res.set).toHaveBeenCalledWith('connection', 'close');
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('Invalid request received'));
+  });
+
+  it('rejects a pack POST without a git Accept header before reading the body', async () => {
+    delete req.headers.accept;
+
+    await extractRawBody(req, res, next);
+
+    expect(rawBody).not.toHaveBeenCalled();
+    expect(req.pipe).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects a pack POST for an unregistered repository before reading the body', async () => {
+    req.url = req.originalUrl = '/github.com/evil/unknown.git/git-receive-pack';
+
+    await extractRawBody(req, res, next);
+
+    expect(db.getRepoByUrl).toHaveBeenCalledWith('https://github.com/evil/unknown.git');
+    expect(rawBody).not.toHaveBeenCalled();
+    expect(req.pipe).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('not in the authorised'));
+  });
+
+  it('rejects with 413 when Content-Length exceeds the limit before reading the body', async () => {
+    req.headers['content-length'] = '1025';
+
+    await extractRawBody(req, res, next);
+
+    expect(rawBody).not.toHaveBeenCalled();
+    expect(req.pipe).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(413);
+  });
+
+  it('rejects with 413 when the streamed body exceeds the limit', async () => {
+    const tooLarge = Object.assign(new Error('request entity too large'), {
+      type: 'entity.too.large',
+    });
+    (rawBody as Mock).mockRejectedValueOnce(tooLarge);
+    req.end();
+
+    await extractRawBody(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(req.bodyRaw).toBeUndefined();
+    expect(res.status).toHaveBeenCalledWith(413);
   });
 });
 

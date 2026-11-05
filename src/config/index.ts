@@ -317,6 +317,16 @@ export const getRateLimit = () => {
   return config.rateLimit;
 };
 
+export const DEFAULT_MAX_PACK_SIZE_BYTES = 100 * 1024 * 1024;
+
+export const getMaxPackSizeBytes = (): number => {
+  const config = loadFullConfiguration();
+  const limit = config.maxPackSizeBytes;
+  return typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+    ? limit
+    : DEFAULT_MAX_PACK_SIZE_BYTES;
+};
+
 // Function to handle configuration updates
 const handleConfigUpdate = async (newConfig: Configuration) => {
   console.log('Configuration updated from external source');
