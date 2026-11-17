@@ -431,6 +431,50 @@ describe('proxyFilter', () => {
       expect(result).toBe(false);
       expect(statusMock).toHaveBeenCalledWith(200);
     });
+
+    it.each([
+      'application/x-git-receive-pack-request;charset=utf-8',
+      'APPLICATION/X-GIT-RECEIVE-PACK-REQUEST',
+      'application/x-git-upload-pack-request',
+    ])(
+      'should reject a POST to git-receive-pack with content-type %s without running the chain',
+      async (contentType) => {
+        const executeChainSpy = vi.spyOn(chain, 'executeChain');
+        mockReq.method = 'POST';
+        mockReq.url = '/github.com/finos/git-proxy.git/git-receive-pack';
+        mockReq.headers = {
+          host: 'localhost:8080',
+          'user-agent': 'git/2.30.0',
+          accept: 'application/x-git-receive-pack-result',
+          'content-type': contentType,
+        };
+
+        const result = await proxyFilter?.(mockReq as Request, mockRes as Response);
+
+        expect(result).toBe(false);
+        expect(executeChainSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it('should run the chain for a POST to git-receive-pack with the exact content-type', async () => {
+      const executeChainSpy = vi.spyOn(chain, 'executeChain').mockResolvedValue({
+        error: false,
+        blocked: false,
+      } as Action);
+      mockReq.method = 'POST';
+      mockReq.url = '/github.com/finos/git-proxy.git/git-receive-pack';
+      mockReq.headers = {
+        host: 'localhost:8080',
+        'user-agent': 'git/2.30.0',
+        accept: 'application/x-git-receive-pack-result',
+        'content-type': 'application/x-git-receive-pack-request',
+      };
+
+      const result = await proxyFilter?.(mockReq as Request, mockRes as Response);
+
+      expect(result).toBe(true);
+      expect(executeChainSpy).toHaveBeenCalledOnce();
+    });
   });
 
   describe('Blocked requests', () => {
@@ -665,6 +709,7 @@ describe('proxy route helpers', () => {
       const res = validGitRequest('/git-upload-pack', {
         'user-agent': 'git/2.40.0',
         accept: 'application/x-git-upload-pack-request',
+        'content-type': 'application/x-git-upload-pack-request',
       });
       expect(res).toBe(true);
     });
