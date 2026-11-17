@@ -49,10 +49,34 @@ const defaultPushQuery: Partial<PushQuery> = {
   type: 'push',
 };
 
+const pushListProjection = {
+  _id: 0,
+  id: 1,
+  allowPush: 1,
+  authorised: 1,
+  blocked: 1,
+  blockedMessage: 1,
+  branch: 1,
+  canceled: 1,
+  commitData: 1,
+  commitFrom: 1,
+  commitTo: 1,
+  error: 1,
+  method: 1,
+  project: 1,
+  rejected: 1,
+  repo: 1,
+  repoName: 1,
+  timestamp: 1,
+  type: 1,
+  url: 1,
+};
+
 export const getPushes = (query: Partial<PushQuery>): Promise<Action[]> => {
   if (!query) query = defaultPushQuery;
   return new Promise((resolve, reject) => {
     db.find(query)
+      .projection(pushListProjection)
       .sort({ timestamp: -1 })
       .exec((err, docs) => {
         // ignore for code coverage as neDB rarely returns errors even for an invalid query

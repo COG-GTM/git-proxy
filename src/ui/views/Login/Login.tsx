@@ -28,7 +28,7 @@ import CardBody from '../../components/Card/CardBody';
 import CardFooter from '../../components/Card/CardFooter';
 import axios, { AxiosError } from 'axios';
 import logo from '../../assets/img/git-proxy.png';
-import { Badge, CircularProgress, FormLabel, Snackbar } from '@material-ui/core';
+import { CircularProgress, FormLabel, Snackbar } from '@material-ui/core';
 import { useAuth } from '../../auth/AuthProvider';
 import { getBaseUrl } from '../../services/apiConfig';
 import { getAxiosConfig, processAuthError } from '../../services/auth';
@@ -225,18 +225,6 @@ const Login: React.FC = () => {
               )}
             </CardFooter>
           </Card>
-          <div style={{ textAlign: 'center', opacity: 0.9, fontSize: 12, marginTop: 20 }}>
-            <Badge
-              overlap='rectangular'
-              color='error'
-              badgeContent='NEW'
-              style={{ marginRight: 20 }}
-            />
-            <span style={{ paddingLeft: 20 }}>
-              View our <a href='/dashboard/push'>open source activity feed</a> or{' '}
-              <a href='/dashboard/repo'>scroll through projects</a> we contribute to
-            </span>
-          </div>
         </GridItem>
       </GridContainer>
     </form>

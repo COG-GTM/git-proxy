@@ -493,7 +493,7 @@ describe('repo routes - edge cases', () => {
     });
 
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('You are not authorised to perform this action.');
+    expect(res.body.message).toBe('Authentication required');
   });
 
   it('should return 400 when repo url is missing', async () => {
@@ -534,7 +534,7 @@ describe('repo routes - edge cases', () => {
       .send({ username: 'testuser' });
 
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('You are not authorised to perform this action.');
+    expect(res.body.message).toBe('Authentication required');
   });
 
   it('should return 401 when non-admin user tries to add authorise user', async () => {
@@ -553,7 +553,7 @@ describe('repo routes - edge cases', () => {
       .send({ username: 'testuser' });
 
     expect(res.status).toBe(401);
-    expect(res.body.message).toBe('You are not authorised to perform this action.');
+    expect(res.body.message).toBe('Authentication required');
   });
 
   describe('DELETE /api/v1/repo/:id/user/push/:username', () => {
@@ -576,7 +576,7 @@ describe('repo routes - edge cases', () => {
       const res = await request(app).delete(`/api/v1/repo/${repoId}/user/push/testuser`).send();
 
       expect(res.status).toBe(401);
-      expect(res.body.message).toBe('You are not authorised to perform this action.');
+      expect(res.body.message).toBe('Authentication required');
     });
 
     it('should return 400 when trying to remove non-existent user', async () => {
@@ -612,7 +612,7 @@ describe('repo routes - edge cases', () => {
         .send();
 
       expect(res.status).toBe(401);
-      expect(res.body.message).toBe('You are not authorised to perform this action.');
+      expect(res.body.message).toBe('Authentication required');
     });
 
     it('should return 400 when trying to remove non-existent user', async () => {
@@ -641,7 +641,7 @@ describe('repo routes - edge cases', () => {
       const res = await request(app).delete(`/api/v1/repo/${repoId}/delete`).send();
 
       expect(res.status).toBe(401);
-      expect(res.body.message).toBe('You are not authorised to perform this action.');
+      expect(res.body.message).toBe('Authentication required');
     });
   });
 
