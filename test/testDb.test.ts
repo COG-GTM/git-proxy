@@ -583,9 +583,21 @@ describe('Database clients', () => {
 
     it('should be able to create a push', async () => {
       await db.writeAudit(TEST_PUSH);
+      const push = await db.getPush(TEST_PUSH.id);
+      const cleanPush = cleanResponseData(TEST_PUSH, push!);
+      expect(cleanPush).toEqual(TEST_PUSH);
+    }, 20000);
+
+    it('should omit steps, user details and attestation when listing pushes', async () => {
+      await db.writeAudit(TEST_PUSH);
       const pushes = await db.getPushes({});
-      const cleanPushes = cleanResponseData(TEST_PUSH, pushes);
-      expect(cleanPushes).toContainEqual(TEST_PUSH);
+      const push = pushes.find((p) => p.id === TEST_PUSH.id);
+      expect(push).toBeDefined();
+      expect(push).toHaveProperty('repo', TEST_PUSH.repo);
+      expect(push).not.toHaveProperty('steps');
+      expect(push).not.toHaveProperty('user');
+      expect(push).not.toHaveProperty('userEmail');
+      expect(push).not.toHaveProperty('attestation');
     }, 20000);
 
     it('should be able to delete a push', async () => {

@@ -485,9 +485,19 @@ describe('Push API', () => {
     const push = res.body.find((p: Action) => p.id === TEST_PUSH.id);
     expect(push).toBeDefined();
 
-    // Check that all values in push are in TEST_PUSH, except for _id
-    expect(push).toMatchObject(TEST_PUSH);
+    expect(push.repo).toBe(TEST_PUSH.repo);
     expect(push.canceled).toBe(false);
+    expect(push).not.toHaveProperty('steps');
+    expect(push).not.toHaveProperty('user');
+    expect(push).not.toHaveProperty('userEmail');
+    expect(push).not.toHaveProperty('attestation');
+
+    const detail = await request(app)
+      .get(`/api/v1/push/${TEST_PUSH.id}`)
+      .set('Cookie', `${cookie}`);
+    expect(detail.status).toBe(200);
+    // Check that all values in push are in TEST_PUSH, except for _id
+    expect(detail.body).toMatchObject(TEST_PUSH);
   });
 
   it('should admit filter options when fetching pushes', async () => {
