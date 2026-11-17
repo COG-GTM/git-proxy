@@ -17,6 +17,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import request from 'supertest';
+import rateLimit from 'express-rate-limit';
 import { ensureAuthenticated } from '../../../src/service/routes/middleware';
 import { jwtAuthHandler } from '../../../src/service/passport/jwtAuthHandler';
 import usersRouter from '../../../src/service/routes/users';
@@ -73,6 +74,7 @@ describe('GET /api/v1/user authentication', () => {
   // Mirror the mount in src/service/routes/index.ts (jwtAuthHandler then ensureAuthenticated).
   const buildApp = (): Express => {
     const a = express();
+    a.use(rateLimit({ windowMs: 60 * 1000, limit: 100 }));
     a.use(express.json());
     a.use('/api/v1/user', jwtAuthHandler(), ensureAuthenticated, usersRouter);
     return a;
