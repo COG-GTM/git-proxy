@@ -137,18 +137,58 @@ describe('url helpers and filter functions used in the proxy', () => {
   });
 
   it('validGitRequest should return true for safe requests', () => {
-    [
-      '/info/refs?service=git-upload-pack',
-      '/info/refs?service=git-receive-pack',
-      '/git-upload-pack',
-      '/git-receive-pack',
-    ].forEach((url) => {
+    ['/info/refs?service=git-upload-pack', '/info/refs?service=git-receive-pack'].forEach((url) => {
       expect(
         validGitRequest(url, {
           'user-agent': 'git/2.30.0',
           accept: 'application/x-git-upload-pack-request',
         }),
       ).toBe(true);
+    });
+    expect(
+      validGitRequest('/git-upload-pack', {
+        'user-agent': 'git/2.30.0',
+        accept: 'application/x-git-upload-pack-result',
+        'content-type': 'application/x-git-upload-pack-request',
+      }),
+    ).toBe(true);
+    expect(
+      validGitRequest('/git-receive-pack', {
+        'user-agent': 'git/2.30.0',
+        accept: 'application/x-git-receive-pack-result',
+        'content-type': 'application/x-git-receive-pack-request',
+      }),
+    ).toBe(true);
+  });
+
+  it('validGitRequest should return false for pack requests whose content-type does not match the operation', () => {
+    [
+      undefined,
+      'application/x-git-receive-pack-request;charset=utf-8',
+      'Application/X-Git-Receive-Pack-Request',
+      'application/x-git-upload-pack-request',
+      'application/octet-stream',
+    ].forEach((contentType) => {
+      expect(
+        validGitRequest('/git-receive-pack', {
+          'user-agent': 'git/2.30.0',
+          accept: 'application/x-git-receive-pack-result',
+          'content-type': contentType,
+        }),
+      ).toBe(false);
+    });
+    [
+      undefined,
+      'application/x-git-upload-pack-request;charset=utf-8',
+      'application/x-git-receive-pack-request',
+    ].forEach((contentType) => {
+      expect(
+        validGitRequest('/git-upload-pack', {
+          'user-agent': 'git/2.30.0',
+          accept: 'application/x-git-upload-pack-result',
+          'content-type': contentType,
+        }),
+      ).toBe(false);
     });
   });
 

@@ -157,6 +157,12 @@ export const processGitURLForNameAndOrg = (gitUrl: string): GitNameBreakdown | n
   }
 };
 
+/** Content-Type required for each git pack endpoint. */
+const PACK_CONTENT_TYPES = new Map<string, string>([
+  ['/git-upload-pack', 'application/x-git-upload-pack-request'],
+  ['/git-receive-pack', 'application/x-git-receive-pack-request'],
+]);
+
 /**
  * Check whether an HTTP request has the expected properties of a
  * Git HTTP request. The URL is expected to be "sanitized", stripped of
@@ -181,12 +187,36 @@ export const validGitRequest = (gitPath: string, headers: IncomingHttpHeaders): 
     // sent in this request
     return agent.startsWith('git/');
   }
-  if (['/git-upload-pack', '/git-receive-pack'].includes(gitPath)) {
+  const expectedContentType = PACK_CONTENT_TYPES.get(gitPath);
+  if (expectedContentType) {
     if (!accept) {
       return false;
     }
     // https://www.git-scm.com/docs/http-protocol#_uploading_data
-    return agent.startsWith('git/') && accept.startsWith('application/x-git-');
+    // The Content-Type must exactly match the operation named in the path so that
+    // the request cannot be classified differently from the operation it performs.
+    return (
+      agent.startsWith('git/') &&
+      accept.startsWith('application/x-git-') &&
+      headers['content-type'] === expectedContentType
+    );
   }
   return false;
+};
+
+/**
+ * Determine the git operation type from the git path of a proxied request.
+ * @param {string | undefined} gitPath Path of the git operation (everything after .git)
+ * @return {'push' | 'pull' | 'default'} The action type for the request.
+ */
+export const getActionTypeFromGitPath = (
+  gitPath: string | undefined,
+): 'push' | 'pull' | 'default' => {
+  if (gitPath === '/git-receive-pack') {
+    return 'push';
+  }
+  if (gitPath === '/git-upload-pack') {
+    return 'pull';
+  }
+  return 'default';
 };
