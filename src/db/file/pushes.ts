@@ -48,6 +48,16 @@ const defaultPushQuery: Partial<PushQuery> = {
   type: 'push',
 };
 
+// Matches the JSON round trip in toClass: Date values become their toJSON() strings
+const datesToJSON = <T>(value: T): T => {
+  if (value instanceof Date) return value.toJSON() as T;
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    for (const key of Object.keys(obj)) obj[key] = datesToJSON(obj[key]);
+  }
+  return value;
+};
+
 export const getPushes = (query: Partial<PushQuery>): Promise<Action[]> => {
   if (!query) query = defaultPushQuery;
   return new Promise((resolve, reject) => {
@@ -59,8 +69,8 @@ export const getPushes = (query: Partial<PushQuery>): Promise<Action[]> => {
         if (err) {
           reject(err);
         } else {
-          // neDB's find() already returns deep copies, so re-cloning via toClass is redundant
-          resolve(docs.map((x) => Object.setPrototypeOf(x, Action.prototype)));
+          // neDB's find() already deep-copies docs except Date values, so only those need detaching
+          resolve(docs.map((x) => Object.setPrototypeOf(datesToJSON(x), Action.prototype)));
         }
       });
   });
