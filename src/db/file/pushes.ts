@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import _ from 'lodash';
 import Datastore from '@seald-io/nedb';
 import { Action } from '../../proxy/actions/Action';
 import { toClass } from '../helper';
@@ -60,11 +59,8 @@ export const getPushes = (query: Partial<PushQuery>): Promise<Action[]> => {
         if (err) {
           reject(err);
         } else {
-          resolve(
-            _.chain(docs)
-              .map((x) => toClass(x, Action.prototype))
-              .value(),
-          );
+          // neDB's find() already returns deep copies, so re-cloning via toClass is redundant
+          resolve(docs.map((x) => Object.setPrototypeOf(x, Action.prototype)));
         }
       });
   });
