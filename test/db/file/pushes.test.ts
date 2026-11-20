@@ -98,4 +98,22 @@ describe('File DB - Pushes', () => {
       expect(pushesModule.db.findOne).toHaveBeenCalledWith({ id: pushId }, expect.any(Function));
     });
   });
+  describe('getPushes', () => {
+    it('should return dates as strings detached from the stored document', async () => {
+      const id = 'test-push-dates';
+      const timestamp = new Date('2026-01-02T03:04:05.000Z');
+      await pushesModule.db.insertAsync({ id, type: 'push', rejection: { timestamp } });
+
+      try {
+        const [push] = (await pushesModule.getPushes({ id } as any)) as any[];
+        expect(push.rejection.timestamp).toBe('2026-01-02T03:04:05.000Z');
+
+        push.rejection.timestamp = 'changed';
+        const stored = await pushesModule.db.findOneAsync({ id });
+        expect(stored.rejection.timestamp.toISOString()).toBe('2026-01-02T03:04:05.000Z');
+      } finally {
+        await pushesModule.db.removeAsync({ id }, {});
+      }
+    });
+  });
 });
